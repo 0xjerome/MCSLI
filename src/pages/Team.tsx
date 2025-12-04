@@ -27,25 +27,25 @@ const Team = () => {
       name: 'Ssenyonjo Jim Maurice',
       position: 'Founder & Executive Director',
       description: 'Visionary leader dedicated to empowering the Deaf community and promoting inclusive communication.',
-      image: 'https://images.pexels.com/photos/2379005/pexels-photo-2379005.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&dpr=2'
+      image: '/img_6717.jpeg'
     },
     {
       name: 'Bukenya Eric Paul',
       position: 'Program Coordinator',
       description: 'Manages and oversees all program activities, ensuring quality delivery and community impact.',
-      image: 'https://images.pexels.com/photos/3778876/pexels-photo-3778876.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&dpr=2'
+      image: '/img_6715.jpeg'
     },
     {
       name: 'Mulindwa Max',
       position: 'Treasurer',
       description: 'Responsible for financial management and ensuring transparent use of resources.',
-      image: 'https://images.pexels.com/photos/3771149/pexels-photo-3771149.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&dpr=2'
+      image: '/unnamed-2.jpg'
     },
     {
       name: 'Kakooza Peter',
       position: 'General Secretary',
       description: 'Handles administrative duties and maintains organizational records and communications.',
-      image: 'https://images.pexels.com/photos/2897883/pexels-photo-2897883.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&dpr=2'
+      image: '/unnamed-3.jpg'
     }
   ];
 

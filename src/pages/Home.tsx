@@ -52,7 +52,8 @@ const Home = () => {
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-          <div className="text-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div className="text-center lg:text-left">
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 leading-tight">
               Through Sign Language, 
               <span className="text-orange-400"> the Hand Can Speak</span>
@@ -89,6 +90,18 @@ const Home = () => {
               >
                 Share Your Story
               </Link>
+            </div>
+            </div>
+            
+            {/* Logo Section */}
+            <div className="flex justify-center lg:justify-end">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-md">
+                <img 
+                  src="/logo_.jpg" 
+                  alt="MCSLI Logo - Through Sign Language, The Hands Can Speak" 
+                  className="w-full h-auto rounded-xl shadow-lg"
+                />
+              </div>
             </div>
           </div>
         </div>

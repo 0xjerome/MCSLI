@@ -27,9 +27,11 @@ const Header = () => {
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <HandMetal className="h-8 w-8 text-white" />
-            </div>
+            <img 
+              src="/logo_.jpg" 
+              alt="MCSLI Logo" 
+              className="h-12 w-12 rounded-lg object-cover"
+            />
             <div>
               <h1 className="text-xl font-bold text-gray-900">MCSLI</h1>
               <p className="text-sm text-gray-600">Through Sign Language, the Hand Can Speak</p>

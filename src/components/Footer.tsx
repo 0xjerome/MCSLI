@@ -10,9 +10,11 @@ const Footer = () => {
           {/* Organization Info */}
           <div className="col-span-1 lg:col-span-2">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <HandMetal className="h-8 w-8 text-white" />
-              </div>
+              <img 
+                src="/logo_.jpg" 
+                alt="MCSLI Logo" 
+                className="h-10 w-10 rounded-lg object-cover"
+              />
               <div>
                 <h3 className="text-xl font-bold">MCSLI</h3>
                 <p className="text-sm text-gray-300">Through Sign Language, the Hand Can Speak</p>
