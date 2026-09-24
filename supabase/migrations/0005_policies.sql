@@ -298,7 +298,7 @@ $$;
 -- Public, read-only platform settings subset (e.g. whether registration is open).
 create or replace function public.get_public_settings() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select coalesce(jsonb_object_agg(key, value), '{}'::jsonb) from public.platform_settings where key in ('registration_open', 'support_email', 'support_phone', 'support_whatsapp');
+  select coalesce(jsonb_object_agg(key, value), '{}'::jsonb) from public.platform_settings where key in ('registration_open', 'support_email', 'support_phone', 'support_whatsapp', 'certificate');
 $$;
 
 -- ---------------------------------------------------------------------------

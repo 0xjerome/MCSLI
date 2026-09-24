@@ -9,7 +9,8 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 const paddings = { none: '', sm: 'p-4', md: 'p-5 sm:p-6', lg: 'p-6 sm:p-8' };
 
-export function Card({ padding = 'md', interactive, className, as: Tag = 'div', ...rest }: CardProps) {
+export function Card({ padding = 'md', interactive, className, as = 'div', ...rest }: CardProps) {
+  const Tag = as as 'div';
   return (
     <Tag
       className={cn(

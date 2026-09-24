@@ -78,6 +78,7 @@ export function Dropdown({
           id={id}
           role="menu"
           aria-label={label}
+          tabIndex={-1}
           onKeyDown={onMenuKey}
           className={cn(
             'absolute z-50 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-ink-200 bg-white p-1 shadow-raised animate-fade-in',
