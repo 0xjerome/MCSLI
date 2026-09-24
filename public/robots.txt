@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /trainer/
+Disallow: /admin/
+Sitemap: https://mcsli.org/sitemap.xml

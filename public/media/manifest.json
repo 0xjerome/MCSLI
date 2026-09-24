@@ -1,0 +1,398 @@
+{
+  "gallery": [
+    {
+      "slug": "team-outdoor-training",
+      "src": "/media/gallery/team-outdoor-training.jpg",
+      "title": "Team Outdoor Training",
+      "alt": "MCSLI team members practicing sign language outdoors at Namirembe Diocese",
+      "category": "community",
+      "date": "2024-11",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "slug": "team-group-photo",
+      "src": "/media/gallery/team-group-photo.jpg",
+      "title": "Team Group Photo",
+      "alt": "Our dedicated team members ready to serve the community",
+      "category": "community",
+      "date": "2024-11",
+      "width": 1080,
+      "height": 810
+    },
+    {
+      "slug": "classroom-sign-language-training",
+      "src": "/media/gallery/classroom-sign-language-training.jpg",
+      "title": "Classroom Sign Language Training",
+      "alt": "Indoor training session teaching Ugandan Sign Language vocabulary",
+      "category": "training",
+      "date": "2024-10",
+      "width": 1040,
+      "height": 780
+    },
+    {
+      "slug": "outdoor-teaching-session",
+      "src": "/media/gallery/outdoor-teaching-session.jpg",
+      "title": "Outdoor Teaching Session",
+      "alt": "Sign language lesson conducted in the grounds of Namirembe Diocese",
+      "category": "training",
+      "date": "2024-10",
+      "width": 1040,
+      "height": 780
+    },
+    {
+      "slug": "team-standing-together",
+      "src": "/media/gallery/team-standing-together.jpg",
+      "title": "MCSLI Team Standing Together",
+      "alt": "Our team gathered for a community outreach event",
+      "category": "community",
+      "date": "2024-09",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "team-planning-meeting",
+      "src": "/media/gallery/team-planning-meeting.jpg",
+      "title": "Team Planning Meeting",
+      "alt": "Team members planning upcoming training sessions and programs",
+      "category": "training",
+      "date": "2024-09",
+      "width": 984,
+      "height": 432
+    },
+    {
+      "slug": "online-cohort-1",
+      "src": "/media/gallery/online-cohort-1.jpg",
+      "title": "MCSLI Online Cohort 1",
+      "alt": "Virtual sign language class for learners across the region",
+      "category": "online",
+      "date": "2024-08",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "family-signs-online-class",
+      "src": "/media/gallery/family-signs-online-class.jpg",
+      "title": "Family Signs Online Class",
+      "alt": "Teaching family-related signs to online participants",
+      "category": "online",
+      "date": "2024-08",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "virtual-learning-session",
+      "src": "/media/gallery/virtual-learning-session.jpg",
+      "title": "Virtual Learning Session",
+      "alt": "Interactive online class with participants from multiple locations",
+      "category": "online",
+      "date": "2024-07",
+      "width": 1080,
+      "height": 607
+    },
+    {
+      "slug": "online-class-presentation",
+      "src": "/media/gallery/online-class-presentation.jpg",
+      "title": "Online Class Presentation",
+      "alt": "Teaching sign language through virtual presentations and demonstrations",
+      "category": "online",
+      "date": "2024-07",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "body-parts-signs-lesson",
+      "src": "/media/gallery/body-parts-signs-lesson.jpg",
+      "title": "Body Parts Signs Lesson",
+      "alt": "Teaching signs for body parts to online students",
+      "category": "online",
+      "date": "2024-06",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "numbers-in-sign-language",
+      "src": "/media/gallery/numbers-in-sign-language.jpg",
+      "title": "Numbers in Sign Language",
+      "alt": "Demonstrating number signs in Ugandan Sign Language",
+      "category": "training",
+      "date": "2024-06",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "indoor-training-session",
+      "src": "/media/gallery/indoor-training-session.jpg",
+      "title": "Indoor Training Session",
+      "alt": "Sign language training with UNAD poster materials",
+      "category": "training",
+      "date": "2024-05",
+      "width": 1024,
+      "height": 576
+    },
+    {
+      "slug": "outdoor-teaching-at-diocese",
+      "src": "/media/gallery/outdoor-teaching-at-diocese.jpg",
+      "title": "Outdoor Teaching at Diocese",
+      "alt": "Sign language lesson at Namirembe Diocese Centenary House",
+      "category": "training",
+      "date": "2024-05",
+      "width": 984,
+      "height": 432
+    },
+    {
+      "slug": "team-on-steps",
+      "src": "/media/gallery/team-on-steps.jpg",
+      "title": "Team on Steps",
+      "alt": "MCSLI team members gathered together for a group photo",
+      "category": "community",
+      "date": "2024-04",
+      "width": 750,
+      "height": 1000
+    },
+    {
+      "slug": "teaching-sign-language-charts",
+      "src": "/media/gallery/teaching-sign-language-charts.jpg",
+      "title": "Teaching Sign Language Charts",
+      "alt": "Using visual aids to teach alphabet and number signs",
+      "category": "training",
+      "date": "2024-04",
+      "width": 984,
+      "height": 432
+    },
+    {
+      "slug": "classroom-learning-session",
+      "src": "/media/gallery/classroom-learning-session.jpg",
+      "title": "Classroom Learning Session",
+      "alt": "Students engaged in sign language study and practice",
+      "category": "training",
+      "date": "2024-03",
+      "width": 984,
+      "height": 432
+    },
+    {
+      "slug": "sentence-building-online",
+      "src": "/media/gallery/sentence-building-online.jpg",
+      "title": "Sentence Building Online",
+      "alt": "Teaching sentence construction in sign language online",
+      "category": "online",
+      "date": "2024-03",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "sign-name-introduction",
+      "src": "/media/gallery/sign-name-introduction.jpg",
+      "title": "Sign Name Introduction",
+      "alt": "Explaining the concept of sign names in the Deaf community",
+      "category": "online",
+      "date": "2024-02",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "song-practice-homework",
+      "src": "/media/gallery/song-practice-homework.jpg",
+      "title": "Song Practice Homework",
+      "alt": "Online class covering signing song practice and story telling",
+      "category": "online",
+      "date": "2024-01",
+      "width": 1100,
+      "height": 688
+    },
+    {
+      "slug": "classroom-training-session",
+      "src": "/media/gallery/classroom-training-session.jpg",
+      "title": "Classroom Training Session",
+      "alt": "Sign language training with alphabet and numbers charts",
+      "category": "training",
+      "date": "2024-01",
+      "width": 984,
+      "height": 432
+    },
+    {
+      "slug": "student-demonstration",
+      "src": "/media/gallery/student-demonstration.jpg",
+      "title": "Student Demonstration",
+      "alt": "Young student practicing sign language in classroom",
+      "category": "training",
+      "date": "2023-12",
+      "width": 432,
+      "height": 984
+    },
+    {
+      "slug": "sign-up-for-sign-language-rights",
+      "src": "/media/gallery/sign-up-for-sign-language-rights.jpg",
+      "title": "Sign Up For Sign Language Rights",
+      "alt": "Advocacy campaign promoting sign language rights awareness",
+      "category": "advocacy",
+      "date": "2023-12",
+      "width": 1080,
+      "height": 810
+    },
+    {
+      "slug": "countries-and-transport-signs",
+      "src": "/media/gallery/countries-and-transport-signs.jpg",
+      "title": "Countries and Transport Signs",
+      "alt": "Teaching geographical and transport related signs",
+      "category": "training",
+      "date": "2023-11",
+      "width": 1080,
+      "height": 810
+    },
+    {
+      "slug": "community-training-session",
+      "src": "/media/gallery/community-training-session.jpg",
+      "title": "Community Training Session",
+      "alt": "Training session with community members in classroom",
+      "category": "training",
+      "date": "2023-11",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "certificate-award-ceremony",
+      "src": "/media/gallery/certificate-award-ceremony.jpg",
+      "title": "Certificate Award Ceremony",
+      "alt": "Awarding certificates to sign language training graduates",
+      "category": "community",
+      "date": "2023-10",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "immanuel-church-of-the-deaf",
+      "src": "/media/gallery/immanuel-church-of-the-deaf.jpg",
+      "title": "Immanuel Church of the Deaf",
+      "alt": "Group photo at Immanuel Church of the Deaf with certificates",
+      "category": "community",
+      "date": "2023-10",
+      "width": 1100,
+      "height": 734
+    },
+    {
+      "slug": "certificate-presentation",
+      "src": "/media/gallery/certificate-presentation.jpg",
+      "title": "Certificate Presentation",
+      "alt": "Presenting certificates to sign language course completers",
+      "category": "community",
+      "date": "2023-09",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "celebration-cake-cutting",
+      "src": "/media/gallery/celebration-cake-cutting.jpg",
+      "title": "Celebration Cake Cutting",
+      "alt": "Community celebration with cake cutting ceremony",
+      "category": "community",
+      "date": "2023-09",
+      "width": 1100,
+      "height": 734
+    },
+    {
+      "slug": "graduation-group-photo",
+      "src": "/media/gallery/graduation-group-photo.jpg",
+      "title": "Graduation Group Photo",
+      "alt": "Graduates holding certificates with celebration cake",
+      "category": "community",
+      "date": "2023-08",
+      "width": 1100,
+      "height": 734
+    },
+    {
+      "slug": "cohort-graduation-cake",
+      "src": "/media/gallery/cohort-graduation-cake.jpg",
+      "title": "Cohort Graduation Cake",
+      "alt": "Master Class Sign Language cohort graduation celebration",
+      "category": "community",
+      "date": "2023-08",
+      "width": 828,
+      "height": 653
+    },
+    {
+      "slug": "interactive-training",
+      "src": "/media/gallery/interactive-training.jpg",
+      "title": "Interactive Training",
+      "alt": "Trainer teaching facial expressions and sign language to students",
+      "category": "training",
+      "date": "2023-07",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "small-group-session",
+      "src": "/media/gallery/small-group-session.jpg",
+      "title": "Small Group Session",
+      "alt": "Intensive training session with engaged participants",
+      "category": "training",
+      "date": "2023-07",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "classroom-learning",
+      "src": "/media/gallery/classroom-learning.jpg",
+      "title": "Classroom Learning",
+      "alt": "Focused learning session with adult students",
+      "category": "training",
+      "date": "2023-06",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "video-learning-session",
+      "src": "/media/gallery/video-learning-session.jpg",
+      "title": "Video Learning Session",
+      "alt": "Using multimedia resources for sign language education",
+      "category": "training",
+      "date": "2023-06",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "community-hall-training",
+      "src": "/media/gallery/community-hall-training.jpg",
+      "title": "Community Hall Training",
+      "alt": "Training session in community hall with diverse participants",
+      "category": "training",
+      "date": "2023-05",
+      "width": 1100,
+      "height": 825
+    },
+    {
+      "slug": "mobile-outreach",
+      "src": "/media/gallery/mobile-outreach.jpg",
+      "title": "MCSLI Mobile Outreach",
+      "alt": "MCSLI bus for community outreach activities",
+      "category": "community",
+      "date": "2023-05",
+      "width": 619,
+      "height": 1100
+    }
+  ],
+  "team": {
+    "ssenyonjo-jim-maurice": "/media/team/ssenyonjo-jim-maurice.jpg",
+    "bukenya-eric-paul": "/media/team/bukenya-eric-paul.jpg",
+    "mulindwa-max": "/media/team/mulindwa-max.jpg",
+    "kakooza-peter": "/media/team/kakooza-peter.jpg",
+    "ochen-morris": "/media/team/ochen-morris.jpg",
+    "nakato-lilian": "/media/team/nakato-lilian.jpg"
+  },
+  "stories": {
+    "nakalanda-sandra": "/media/stories/nakalanda-sandra.jpg",
+    "mwesigwa-david": "/media/stories/mwesigwa-david.jpg",
+    "elizabeth-sebunya": "/media/stories/elizabeth-sebunya.jpg",
+    "namukwaya-sharon-kigongo": "/media/stories/namukwaya-sharon-kigongo.jpg",
+    "ssekamatte-yuda-morris": "/media/stories/ssekamatte-yuda-morris.jpg",
+    "nalwanga-lilian": "/media/stories/nalwanga-lilian.jpg"
+  },
+  "shop": [
+    "/media/shop/polo-1.jpg",
+    "/media/shop/polo-2.jpg",
+    "/media/shop/polo-3.jpg",
+    "/media/shop/polo-4.jpg",
+    "/media/shop/polo-5.jpg",
+    "/media/shop/polo-6.jpg"
+  ]
+}

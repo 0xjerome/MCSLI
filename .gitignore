@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# environment
+.env.local
+.env.*.local
+# test output
+coverage
+playwright-screenshots
