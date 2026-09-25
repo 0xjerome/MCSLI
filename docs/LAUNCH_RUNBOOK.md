@@ -121,6 +121,7 @@ checklist on *Settings & fees* is empty.
 1. Supabase → Organization *MasterCLass* → Billing → **Change subscription plan → Pro** (adds daily
    backups kept 7 days, no inactivity pausing, larger quotas). Keep the spend cap on at first.
 2. Next day: Database → Backups → confirm a scheduled backup is listed; note the date here.
+   Also Authentication → Attack Protection → **Leaked password protection (HaveIBeenPwned) → on** (Pro feature).
 3. Account (avatar) → **Security → enable MFA** for admin@mcsli.org's Supabase login (currently
    *Disabled*); Organization → Team → invite a **second trusted owner** (currently 1 member).
 4. Storage files are not in database backups: run `node scripts/backup-storage.mjs` weekly on an

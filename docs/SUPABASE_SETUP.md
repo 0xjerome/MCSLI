@@ -9,10 +9,10 @@ files in this repo; nothing is generic boilerplate.
 | Item | Status |
 |---|---|
 | Hosted project | Connected: ref `midvngbooepderxboqru`, eu-west-1 (Ireland), Postgres 17.6, organisation *MasterCLass* (1 member: admin@mcsli.org, Owner). **Free plan** – no backups (verified). |
-| Migrations `0001`–`0014` | Applied with `supabase db push`; local and hosted schemas identical (types regenerated from production). |
+| Migrations `0001`–`0015` | Applied with `supabase db push`; local and hosted schemas identical (types regenerated from production). |
 | Edge Functions | `identity-document-url`, `invite-staff`, `email-dispatch` deployed. |
 | Auth | Site URL `https://mcsli.org`; 12 redirect URLs (`/login`, `/reset-password`, `/accept-invite` on `mcsli.org`, `www.`, `learn.` and `mcsli.vercel.app`); 8-char passwords; e-mail confirmation; TOTP MFA; DB SSL enforced. **Production e-mail (Resend SMTP) not yet connected** (§6). |
-| Tests | 63 database tests; E2E 45/45 locally (real e-mails incl. invitations) and 45/45 on the hosted project. |
+| Tests | 63 database tests; E2E 45/45 locally (real e-mails incl. invitations) and 45/45 on the hosted project. Security advisor: only intentional items + *leaked password protection* (Pro-plan feature – enable after the upgrade: Authentication → Attack Protection). |
 | Production data | No legitimate data yet. Test courses, enrollments, files, tickets and payment methods from the E2E runs were deleted; 5 banned + suspended `[TEST]` accounts and their audit rows remain (audit log is immutable). |
 
 ## 1. What is in `supabase/`
@@ -21,7 +21,7 @@ files in this repo; nothing is generic boilerplate.
 supabase/
   config.toml                       CLI config: auth (e-mail confirmation, 8-char passwords, redirect
                                     URLs, templates), storage, functions, production override block
-  migrations/0001 … 0014            ordered schema history (below)
+  migrations/0001 … 0015            ordered schema history (below)
   functions/identity-document-url   audited short-lived URLs for identity scans
   functions/invite-staff            staff invitation e-mails (ADMIN/TRAINER)
   functions/email-dispatch          sends queued transactional e-mails through Resend
@@ -46,6 +46,7 @@ supabase/
 | `0012_advisor_fixes` | Supabase advisor follow-ups: pinned search_path on 6 helpers, no EXECUTE on trigger functions, documented intentional SECURITY DEFINER views |
 | `0013_staff_invitations_and_launch_safety` | staff invitations; optional staff MFA enforcement (`require_staff_mfa`); super-admin-only critical settings; bootstrap requires confirmed e-mail; payment methods need details before enabling; publish validation; delete protection for content with student history; lesson/practice thumbnails; course-media MIME whitelist |
 | `0014_transactional_email_outbox` | `email_outbox` + payment e-mail triggers + pg_cron → `email-dispatch` |
+| `0015_pg_net_schema` | pg_net moved to the `extensions` schema (advisor lint) |
 
 Database objects after `0012` (identical on the local stack and the hosted project): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,
