@@ -45,6 +45,17 @@ describe('LoginPage', () => {
     expect(resendVerification).toHaveBeenCalledWith('a@b.test', undefined); // no captcha token when Turnstile is off
   });
 
+  it('does not force a successful login into the student app', async () => {
+    const user = userEvent.setup();
+    signIn.mockResolvedValueOnce(undefined);
+    renderAt();
+    await user.type(screen.getByLabelText(/e-mail/i), 'admin@mcsli.org');
+    await user.type(screen.getByLabelText(/password/i), 'secret123');
+    await user.click(screen.getByRole('button', { name: /log in/i }));
+    expect(signIn).toHaveBeenCalled();
+    expect(screen.queryByText('student home')).not.toBeInTheDocument();
+  });
+
   it('returns the user to the page they wanted after login', async () => {
     const user = userEvent.setup();
     signIn.mockResolvedValueOnce(undefined);
