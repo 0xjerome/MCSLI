@@ -37,9 +37,10 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await signIn(email, password, captcha.token);
-      // AuthProvider will load the profile; RedirectIfAuthed handles role routing, but
-      // honour a remembered destination first.
-      navigate(from ?? '/app', { replace: true });
+      // When there is no remembered destination, stay on /login briefly and let
+      // RedirectIfAuthed route from the freshly loaded profile role. Hard-coding /app
+      // sends ADMIN/SUPER_ADMIN accounts to the student shell.
+      if (from) navigate(from, { replace: true });
     } catch (err) {
       captcha.reset();
       const msg = friendlyError(err);
