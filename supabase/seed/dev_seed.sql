@@ -25,9 +25,9 @@ values (
 ) on conflict (id) do nothing;
 
 insert into public.course_months (id, course_id, month_number, title, description, requires_assessment) values
-  ('22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111111', 1, 'Month 1 – Foundations', 'Fingerspelling, numbers, greetings and introductions, Deaf culture basics.', true),
-  ('22222222-2222-2222-2222-222222222202', '11111111-1111-1111-1111-111111111111', 2, 'Month 2 – Everyday Communication', 'Family, time, places, food, feelings and simple conversations.', true),
-  ('22222222-2222-2222-2222-222222222203', '11111111-1111-1111-1111-111111111111', 3, 'Month 3 – Sentences and Stories', 'Sentence building, questions, storytelling, signing songs and receptive practice.', true)
+  ('22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111111', 1, 'Foundations', 'Fingerspelling, numbers, greetings and introductions, Deaf culture basics.', true),
+  ('22222222-2222-2222-2222-222222222202', '11111111-1111-1111-1111-111111111111', 2, 'Everyday Communication', 'Family, time, places, food, feelings and simple conversations.', true),
+  ('22222222-2222-2222-2222-222222222203', '11111111-1111-1111-1111-111111111111', 3, 'Sentences and Stories', 'Sentence building, questions, storytelling, signing songs and receptive practice.', true)
 on conflict (id) do nothing;
 
 insert into public.modules (id, month_id, position, title, description) values

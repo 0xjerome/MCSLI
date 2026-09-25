@@ -57,7 +57,7 @@ export function PublicHeader() {
           <Logo className="h-9 w-9" />
           <span className="flex flex-col leading-none">
             <span className="font-display text-lg font-bold tracking-tight text-ink-900">MCSLI</span>
-            <span className="hidden text-[11px] text-ink-500 sm:block">Master Class Sign Language Initiative</span>
+            <span className="hidden text-[11px] text-ink-500 sm:block xl:hidden 2xl:block">Master Class Sign Language Initiative</span>
           </span>
         </Link>
 
@@ -69,7 +69,7 @@ export function PublicHeader() {
                   to={n.to}
                   end={n.to === '/'}
                   className={({ isActive }) =>
-                    cn('rounded-lg px-3 py-2 text-sm font-medium transition-colors', isActive ? 'bg-brand-50 text-brand-700' : 'text-ink-700 hover:bg-ink-100 hover:text-ink-900')
+                    cn('whitespace-nowrap rounded-lg px-2 py-2 text-sm font-medium transition-colors 2xl:px-3', isActive ? 'bg-brand-50 text-brand-700' : 'text-ink-700 hover:bg-ink-100 hover:text-ink-900')
                   }
                 >
                   {n.label}
@@ -86,7 +86,7 @@ export function PublicHeader() {
             </ButtonLink>
           ) : (
             <>
-              <Link to="/login" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-100 sm:inline-block">
+              <Link to="/login" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-100 sm:inline-block">
                 Log in
               </Link>
               <ButtonLink to="/register" variant="accent" size="sm" rightIcon={<ArrowRight className="h-4 w-4" aria-hidden="true" />}>

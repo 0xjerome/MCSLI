@@ -51,8 +51,8 @@ export default function TrainerDashboardPage() {
               {upcoming.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div>
-                    <Link to={`/trainer/students/${a.enrollment.id}`} className="font-medium text-ink-900 hover:underline">
-                      {a.enrollment.student.full_name}
+                    <Link to={`/trainer/students/${a.enrollment_id}`} className="font-medium text-ink-900 hover:underline">
+                      {a.enrollment?.student?.full_name ?? 'Student'}
                     </Link>
                     <p className="text-xs text-ink-500">
                       Month {a.month.month_number} · {a.scheduled_at ? formatDateTime(a.scheduled_at) : 'unscheduled'}
@@ -75,8 +75,8 @@ export default function TrainerDashboardPage() {
               {reassess.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
                   <div>
-                    <Link to={`/trainer/students/${a.enrollment.id}`} className="font-medium text-ink-900 hover:underline">
-                      {a.enrollment.student.full_name}
+                    <Link to={`/trainer/students/${a.enrollment_id}`} className="font-medium text-ink-900 hover:underline">
+                      {a.enrollment?.student?.full_name ?? 'Student'}
                     </Link>
                     <p className="text-xs text-ink-500">Month {a.month.month_number} · {a.notes}</p>
                   </div>

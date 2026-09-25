@@ -40,7 +40,7 @@ export function RecordAssessmentDialog({ assessment, onClose, onRecorded }: { as
   };
 
   return (
-    <Dialog open={Boolean(assessment)} onClose={onClose} title={assessment ? `Record assessment – ${assessment.enrollment.student.full_name}` : ''} description={assessment ? `Month ${assessment.month.month_number} · ${assessment.month.title}${assessment.is_reassessment ? ' · reassessment' : ''}` : undefined} size="lg">
+    <Dialog open={Boolean(assessment)} onClose={onClose} title={assessment ? `Record assessment – ${assessment.enrollment?.student?.full_name ?? 'Student'}` : ''} description={assessment ? `Month ${assessment.month.month_number} · ${assessment.month.title}${assessment.is_reassessment ? ' · reassessment' : ''}` : undefined} size="lg">
       <form onSubmit={submit} className="space-y-4">
         <RadioCards<AssessmentResult>
           name="result"

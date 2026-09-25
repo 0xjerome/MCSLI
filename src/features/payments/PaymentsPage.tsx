@@ -150,9 +150,9 @@ export default function PaymentsPage() {
         </ul>
       </Card>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+      <div className="mt-6 grid gap-6 lg:grid-cols-5 [&>*]:min-w-0">
         {/* How to pay */}
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardHeader title="How to pay" description="Pay with one of MCSLI's official channels, then submit the details so an administrator can confirm it." />
             {enabledMethods.length === 0 ? (
@@ -306,7 +306,7 @@ function MethodCard({ method: m }: { method: PaymentMethod }) {
         {m.account_number && (
           <div className="flex justify-between gap-3">
             <dt className="text-ink-500">Account number</dt>
-            <dd className="flex items-center font-mono font-medium">
+            <dd className="flex items-center break-all font-mono font-medium">
               {m.account_number} <CopyBtn value={m.account_number} />
             </dd>
           </div>

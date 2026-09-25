@@ -38,8 +38,8 @@ export default function TrainerAssessmentsPage() {
         rowKey={(a) => a.id}
         empty={<EmptyState icon={<ClipboardCheck className="h-6 w-6" />} title="Nothing here" description={tab === 'completed' ? 'No completed assessments yet.' : 'Schedule assessments from a student\'s page when they finish a month.'} />}
         columns={[
-          { key: 'student', header: 'Student', primary: true, cell: (a) => <Link to={`${base}/${a.enrollment.id}`} className="hover:underline">{a.enrollment.student.full_name}</Link> },
-          { key: 'course', header: 'Course', cell: (a) => a.enrollment.course.title, hideOnMobile: true },
+          { key: 'student', header: 'Student', primary: true, cell: (a) => <Link to={`${base}/${a.enrollment_id}`} className="hover:underline">{a.enrollment?.student?.full_name ?? 'Student'}</Link> },
+          { key: 'course', header: 'Course', cell: (a) => a.enrollment?.course?.title ?? '', hideOnMobile: true },
           { key: 'month', header: 'Month', cell: (a) => `Month ${a.month.month_number}` },
           { key: 'type', header: 'Type', cell: (a) => (a.is_reassessment ? <Badge tone="warning" size="sm">Reassessment</Badge> : <Badge size="sm">First attempt</Badge>) },
           { key: 'when', header: 'Scheduled', cell: (a) => (a.scheduled_at ? formatDateTime(a.scheduled_at) : 'To be arranged') },

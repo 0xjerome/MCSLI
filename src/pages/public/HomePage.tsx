@@ -46,7 +46,7 @@ export default function HomePage() {
         <div className="container-x relative grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-12 lg:gap-12 lg:py-24">
           <div className="lg:col-span-6">
             <p className="eyebrow">{hero.eyebrow}</p>
-            <h1 className="mt-4 text-display-lg sm:text-display-xl">
+            <h1 className="mt-4 font-display text-[2.5rem] font-extrabold leading-[1.08] tracking-tight sm:text-display-lg lg:text-display-xl">
               {hero.headline}
               <br />
               <span className="text-brand-600">{hero.headlineAccent}</span>
@@ -95,7 +95,7 @@ export default function HomePage() {
               title="Learn Ugandan Sign Language online, month by month"
               description="The same MCSLI curriculum taught in Kampala, now on your phone. Each month combines video lessons, practice signs and quizzes, and finishes with a live assessment by an MCSLI trainer."
             />
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <ButtonLink to="/register" variant="primary" size="lg" rightIcon={<ArrowRight className="h-5 w-5" aria-hidden="true" />}>
                 Start Learning Online
               </ButtonLink>

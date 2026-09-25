@@ -14,7 +14,7 @@ export function Card({ padding = 'md', interactive, className, as = 'div', ...re
   return (
     <Tag
       className={cn(
-        'rounded-2xl border border-ink-200 bg-white shadow-card',
+        'min-w-0 rounded-2xl border border-ink-200 bg-white shadow-card',
         interactive && 'transition-shadow hover:shadow-raised',
         paddings[padding],
         className,
