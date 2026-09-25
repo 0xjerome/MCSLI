@@ -16,6 +16,7 @@ MCSLI trainers, and receive verifiable certificates.
 
 Read **[docs/FINDINGS.md](docs/FINDINGS.md)** first: it records what the original repository
 and the live site contained, where they contradicted each other, and what was preserved.
+Backend setup, security model and deployment: **[docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)**.
 
 ---
 
@@ -117,8 +118,8 @@ defaults); login, registration and the learning platform show a clear "not conne
 | `VITE_SUPABASE_URL` | browser | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | browser | anon (public) key – safe to ship, RLS governs access |
 | `VITE_SITE_URL` | browser | canonical site URL for SEO, e-mail redirects and certificate QR codes |
-| `DATABASE_URL` / `TEST_DATABASE_URL` | scripts & tests only | Postgres connection for `scripts/db-apply.mjs` and `npm run test:db` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Edge Functions & `scripts/seed-demo-users.mjs` only | **never** prefixed with `VITE_`, never committed |
+| `DATABASE_URL` / `TEST_DATABASE_URL` | scripts & tests only | Postgres connection for `scripts/db-apply.mjs`, `scripts/bootstrap-super-admin.mjs` and `npm run test:db` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Edge Functions, `scripts/seed-demo-users.mjs` (local), `scripts/e2e-supabase.mjs` | **never** prefixed with `VITE_`, never committed |
 
 ## Database setup & migrations
 
@@ -133,24 +134,33 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0005_policies.sql` | row-level security policies for every table, column-level grants, student-safe views |
 | `0006_storage.sql` | private buckets and storage object policies |
 | `0007_defaults.sql` | baseline rows: three **disabled** payment methods and platform settings |
+| `0008_security_hardening.sql` | RLS audit fixes: function EXECUTE whitelist, scoped trainer access, moderation guards, append-only audit log, month completion rule, quiz answer withholding, audited super-admin bootstrap |
+| `0009_identity_encryption.sql` | NIN/passport numbers encrypted with a Vault key (pgcrypto AES-256) + HMAC lookup; plaintext column removed |
+| `0010_public_endpoints.sql` | rate-limited certificate verification and contact form; public site content serves only verified statistics |
 
-**Hosted Supabase (recommended)**
+**Hosted Supabase** (full procedure in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)). The
+Supabase CLI is a dev dependency, so no global install is needed:
 
 ```bash
-npm i -g supabase
-supabase login
-supabase link --project-ref <your-project-ref>
-supabase db push                                 # applies supabase/migrations in order
-supabase functions deploy identity-document-url  # audited signed URLs for identity documents
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push --dry-run && npx supabase db push   # applies supabase/migrations in order
+npx supabase functions deploy identity-document-url      # audited signed URLs for identity documents
+npx supabase config push                                  # auth settings, redirect URLs, e-mail templates
 ```
 
-Then in the Supabase dashboard: **Authentication → URL configuration** – set the site URL and
-add `https://<your-domain>/login` and `https://<your-domain>/reset-password` as redirect URLs;
-**Authentication → Email** – keep "Confirm email" enabled.
+Auth settings (confirmation required, 8-character passwords, redirect allow-list, templates) live
+in `supabase/config.toml`; fill in `[remotes.production]` with the project ref before
+`config push`. Production e-mail needs MCSLI's own SMTP credentials.
 
-**Bootstrap the first administrator**: sign up through `/register`, then in the SQL editor run
-`update public.profiles set role = 'SUPER_ADMIN' where email = 'you@mcsli.org';`
-(the profile trigger allows role changes from a service-role/SQL-editor session).
+**Bootstrap the first super administrator** (one time, audited, refused through the API or once a
+super admin exists): the person registers through `/register`, confirms the e-mail, then run
+`select public.bootstrap_super_admin('you@mcsli.org');` in the SQL editor, or
+`DATABASE_URL=… node scripts/bootstrap-super-admin.mjs you@mcsli.org`. Every other role is granted
+in **Admin → Trainers & staff**.
+
+**Local Supabase stack** (Docker): `npx supabase start` runs Postgres, Auth, Storage, the Edge
+Runtime and a mail catcher, applies all migrations and the `[DEMO]` seed.
 
 **Plain Postgres (no CLI/Docker)** – used by the integration tests:
 
@@ -278,9 +288,15 @@ to honour the retention policy (`identity_retention_days` setting).
 
 * RLS on every table; default deny; column-level grants hide `correct_answer`, `explanation` and
   unreleased exam scores from the shared `authenticated` role.
-* Identification numbers: no direct SELECT for anyone; students see `••••••••••1234` through
-  the `identity_summary` view; admins reveal the full number only through
-  `admin_reveal_identity_number()`, which writes an audit row. Numbers never appear in URLs.
+* Identification numbers are **encrypted at rest** (Vault key + pgcrypto AES-256, HMAC for exact
+  search); no direct SELECT for anyone; students see `••••••••••1234` through `identity_summary`;
+  admins reveal the full number only through `admin_reveal_identity_number()`, which writes an
+  audit row without the number. Numbers never appear in URLs, logs or browser storage.
+* Identity scans: owner-only storage access; staff open them only through the
+  `identity-document-url` Edge Function, which authorises and audits in SQL before signing a
+  120-second URL.
+* Function EXECUTE is an explicit whitelist: internal helpers (notifications, audit, payment
+  totals) cannot be called through the API. The audit log is append-only.
 * All uploads validated by MIME type and size in the browser, in SQL and by bucket configuration.
 * Storage paths are namespaced by user id and checked in RLS; no public buckets.
 * Business mutations are SECURITY DEFINER functions with explicit role checks, `search_path`
@@ -289,14 +305,16 @@ to honour the retention policy (`identity_retention_days` setting).
   their own role or suspend themselves.
 * Sessions: Supabase PKCE flow, auto-refresh; protected routes redirect and remember the target.
 * Error messages are normalised (`friendlyError`) so raw database errors never reach users.
-* Rate limiting: Supabase Auth's built-in limits apply to sign-up, login and password reset.
-  Add an API gateway/WAF rule for `/rest/v1/rpc/verify_certificate` if abuse is observed.
+* Rate limiting: Supabase Auth's built-in limits apply to sign-up, login and password reset;
+  `verify_certificate` (30 / 10 min per client) and the contact form (5 / 10 min) are limited in
+  the database. Edge rules need a Supabase custom domain behind Cloudflare – see
+  docs/SUPABASE_SETUP.md §13.
 * Secrets: only `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` reach the browser; `.env*.local`
   is git-ignored; the service-role key is used only in Edge Functions and the demo-user script.
 
-Recommended follow-ups before public launch: enable Supabase's optional column encryption
-(Vault) for `identity_verifications.id_number`, turn on e-mail rate limiting alerts, and put the
-site behind Cloudflare.
+Recommended before public launch: escrow the Vault identity key (docs/SUPABASE_SETUP.md §9),
+configure SMTP, choose a plan with backups, and connect an error reporter
+(`src/lib/observability.ts`).
 
 ## Public website content
 
@@ -322,6 +340,10 @@ npm run check         # all of the above
 # Database integration tests – real Postgres, real migrations, RLS as each role
 createdb mcsli_test
 TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5432/mcsli_test npm run test:db
+
+# End-to-end through the real Supabase HTTP APIs (Auth, PostgREST, Storage, Edge Functions)
+npx supabase start
+npm run test:e2e
 ```
 
 What is covered:
@@ -338,8 +360,18 @@ What is covered:
   escalation blocked, exam lifecycle with hidden scores and release, certificate issue / verify /
   revoke / reissue, discussion permissions and moderation, support tickets, notifications,
   site-content permissions, dashboards.
+* `tests/db/security.test.ts` – negative security tests: forged notifications/audit rows,
+  cross-student reads, self-promotion, suspended/demoted staff, payment self-confirmation, fee
+  tampering, assessment tampering, locked content via direct calls, exam question leakage, expired
+  exam reopening, certificate self-issue, identity storage bypass (IDOR), moderation bypass,
+  notification rewriting, audit log immutability, admin settings, verification rate limiting.
+* `scripts/e2e-supabase.mjs` – 43 steps: registration → e-mail confirmation → identity → admin
+  verification → enrollment → payments → month 1 → lesson → quiz → failed assessment →
+  reassessment → month 2 lock/unlock with installment 2 → exam → grading → certificate issue /
+  verify / revoke / reissue, support, discussions, notifications, and cross-user attacks.
 * `src/**/*.test.tsx` – registration wizard validation and payload, login errors and redirect,
   LockedCard explanations, responsive DataTable, Dialog accessibility, content merging.
+* `src/lib/supabase.test.ts` – raw Postgres/RLS errors are never shown to users; log redaction.
 
 ## Deployment
 
@@ -352,7 +384,8 @@ VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… VITE_SITE_URL=https://mcsli.org
 
 Add a rewrite of all paths to `/index.html` (e.g. Netlify `_redirects`: `/* /index.html 200`).
 Update `public/sitemap.xml` / `robots.txt` if the domain changes. Point Supabase Auth redirect
-URLs at the deployed domain and deploy the Edge Function.
+URLs at the deployed domain (`[remotes.production.auth]` in `supabase/config.toml`) and deploy the
+Edge Function. Moving to e.g. `https://learn.mcsli.org` only needs `VITE_SITE_URL` and those URLs.
 
 ## Future AI integration points
 
