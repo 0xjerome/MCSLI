@@ -9,7 +9,7 @@ files in this repo; nothing is generic boilerplate.
 |---|---|
 | Hosted Supabase project | **Not connected.** No Supabase account/token exists on the build machine; see [Remaining external setup](#remaining-external-setup). |
 | Migrations `0001`–`0011` | Applied and verified on the Supabase local stack (Postgres 17, CLI 2.117). Deterministic from scratch (`supabase db reset`), re-runnable, and upgrade-safe (existing plaintext ID numbers are encrypted in place). |
-| RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 54 database tests + 43-step HTTP end-to-end test pass. |
+| RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 55 database tests + 43-step HTTP end-to-end test pass. |
 | Edge Function `identity-document-url` | Served and tested on the local stack (owner / other student / trainer / anonymous / admin). |
 
 ---
@@ -322,7 +322,7 @@ refuses hosted projects unless `E2E_ALLOW_REMOTE=1` and cleans up after itself.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build      # frontend + domain
-TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 54 SQL tests
+TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 55 SQL tests
 npx supabase start && npm run test:e2e                               # 43-step HTTP end-to-end
 npm run db:types                                                     # regenerate src/types/supabase.generated.ts
 ```

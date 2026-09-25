@@ -317,6 +317,17 @@ describe('public endpoints', () => {
     expect(JSON.stringify((await client.query(`select subject from private.rate_limits`)).rows)).not.toContain('203.0.113.9');
   });
 
+  it('the public contact form is rate limited and cannot pre-set message status', async () => {
+    const send = (i: number) => asUser(client, null, async (q) => {
+      await q(`select set_config('request.headers', '{"x-forwarded-for":"203.0.113.77"}', true)`);
+      return q(`insert into public.contact_messages (full_name, email, body, status) values ('[TEST] Visitor', 'visitor@example.test', $1, 'archived')`, [`[TEST] message ${i}`]);
+    });
+    for (let i = 0; i < 5; i++) await send(i);
+    expect(await expectDenied(send(5))).toMatch(/Too many messages/);
+    const statuses = (await client.query(`select distinct status from public.contact_messages where full_name = '[TEST] Visitor'`)).rows.map((r) => r.status);
+    expect(statuses).toEqual(['new']);
+  });
+
   it('anonymous users cannot read private tables', async () => {
     for (const t of ['profiles', 'enrollments', 'payments', 'identity_documents', 'assessment_attempts', 'certificates', 'support_tickets', 'notifications', 'audit_logs', 'contact_messages', 'platform_settings']) {
       const r = await asUser(client, null, async (q) => {
