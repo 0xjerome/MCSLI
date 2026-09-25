@@ -33,3 +33,6 @@ playwright-screenshots
 # any real environment file (only the placeholder template is committed)
 .env.*
 !.env.example
+
+# Storage backups contain identity scans and receipts – never commit
+storage-backup-*/

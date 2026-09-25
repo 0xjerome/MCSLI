@@ -3,25 +3,17 @@
 How this repository's backend is configured, deployed and verified. Everything here refers to
 files in this repo; nothing is generic boilerplate.
 
-**Current status (2026-09-25)**
+**Current status (2026-09-25, final readiness phase)** – launch steps that need MCSLI are in
+[LAUNCH_RUNBOOK.md](LAUNCH_RUNBOOK.md).
 
 | Item | Status |
 |---|---|
-| Hosted project | **Connected**: `admin@mcsli.org's Project`, ref `midvngbooepderxboqru`, region eu-west-1 (Ireland), Postgres 17.6, organisation *MasterCLass*, **Free plan**. The project was empty before deployment (0 users, 0 tables, 0 buckets). |
-| Migrations `0001`–`0012` | Applied with `supabase db push` and recorded in `supabase_migrations`. Remote objects match local exactly (36 tables all with RLS, 6 views, 84 functions, 94 + 13 policies, 6 private buckets, Vault key). No seed/demo data. |
-| Edge Function `identity-document-url` | Deployed (v1, `verify_jwt = true`), tested on the hosted project. |
-| Auth | Site URL `https://mcsli.org`, 6 redirect URLs (`/login`, `/reset-password` on `mcsli.org`, `www.`, `learn.`), 8-character minimum password, e-mail confirmation on, TOTP MFA available. **Custom e-mail templates and real e-mail delivery need SMTP** (§6). |
-| Tests | Hosted E2E **43/43**; local E2E 43/43; 55 database tests; Supabase security advisor reviewed (§7). |
-| Backups | **None** – verified in Dashboard → Database → Backups: "Free Plan does not include project backups" (§15). |
-| Test data left in production | 5 `[TEST]` accounts (`mcsli-e2e-…@mcsli-e2e.test`, **banned and suspended**, staff roles removed), one archived/unpublished `[TEST] E2E Course …`, a disabled `[TEST] MTN …` payment method, 2 `[TEST]` files in private buckets, and their audit rows. Removal SQL in §17. |
-
----|---|
-| Hosted Supabase project | **Not connected.** No Supabase account/token exists on the build machine; see [Remaining external setup](#remaining-external-setup). |
-| Migrations `0001`–`0011` | Applied and verified on the Supabase local stack (Postgres 17, CLI 2.117). Deterministic from scratch (`supabase db reset`), re-runnable, and upgrade-safe (existing plaintext ID numbers are encrypted in place). |
-| RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 55 database tests + 43-step HTTP end-to-end test pass. |
-| Edge Function `identity-document-url` | Served and tested on the local stack (owner / other student / trainer / anonymous / admin). |
-
----
+| Hosted project | Connected: ref `midvngbooepderxboqru`, eu-west-1 (Ireland), Postgres 17.6, organisation *MasterCLass* (1 member: admin@mcsli.org, Owner). **Free plan** – no backups (verified). |
+| Migrations `0001`–`0014` | Applied with `supabase db push`; local and hosted schemas identical (types regenerated from production). |
+| Edge Functions | `identity-document-url`, `invite-staff`, `email-dispatch` deployed. |
+| Auth | Site URL `https://mcsli.org`; 12 redirect URLs (`/login`, `/reset-password`, `/accept-invite` on `mcsli.org`, `www.`, `learn.` and `mcsli.vercel.app`); 8-char passwords; e-mail confirmation; TOTP MFA; DB SSL enforced. **Production e-mail (Resend SMTP) not yet connected** (§6). |
+| Tests | 63 database tests; E2E 45/45 locally (real e-mails incl. invitations) and 45/45 on the hosted project. |
+| Production data | No legitimate data yet. Test courses, enrollments, files, tickets and payment methods from the E2E runs were deleted; 5 banned + suspended `[TEST]` accounts and their audit rows remain (audit log is immutable). |
 
 ## 1. What is in `supabase/`
 
@@ -29,8 +21,10 @@ files in this repo; nothing is generic boilerplate.
 supabase/
   config.toml                       CLI config: auth (e-mail confirmation, 8-char passwords, redirect
                                     URLs, templates), storage, functions, production override block
-  migrations/0001 … 0012            ordered schema history (below)
+  migrations/0001 … 0014            ordered schema history (below)
   functions/identity-document-url   audited short-lived URLs for identity scans
+  functions/invite-staff            staff invitation e-mails (ADMIN/TRAINER)
+  functions/email-dispatch          sends queued transactional e-mails through Resend
   templates/confirmation.html       "Confirm your MCSLI account" e-mail
   templates/recovery.html           "Reset your MCSLI password" e-mail
   seed/dev_seed.sql                 [DEMO] course – LOCAL ONLY (loaded by `supabase db reset`)
@@ -50,6 +44,8 @@ supabase/
 | `0010_public_endpoints` | rate limits on certificate verification + contact form; verified-only public impact stats |
 | `0011_enforce_registration_open` | the Admin → Settings "Registration open" switch now blocks new enrollments server-side |
 | `0012_advisor_fixes` | Supabase advisor follow-ups: pinned search_path on 6 helpers, no EXECUTE on trigger functions, documented intentional SECURITY DEFINER views |
+| `0013_staff_invitations_and_launch_safety` | staff invitations; optional staff MFA enforcement (`require_staff_mfa`); super-admin-only critical settings; bootstrap requires confirmed e-mail; payment methods need details before enabling; publish validation; delete protection for content with student history; lesson/practice thumbnails; course-media MIME whitelist |
+| `0014_transactional_email_outbox` | `email_outbox` + payment e-mail triggers + pg_cron → `email-dispatch` |
 
 Database objects after `0012` (identical on the local stack and the hosted project): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,
@@ -123,7 +119,8 @@ after filling in `[remotes.production]` (bottom of the file) with the project re
 | Minimum password length | 8 (matches the registration form) |
 | Resend throttle | 60 s |
 | Site URL | `https://mcsli.org` (production), `http://localhost:5173` (local) |
-| Redirect allow-list | `<site>/login`, `<site>/reset-password` (+ `www.` and localhost variants) |
+| Redirect allow-list | `<site>/login`, `<site>/reset-password`, `<site>/accept-invite` for `mcsli.org`, `www.`, `learn.`, `mcsli.vercel.app` (localhost only in the local config) |
+| DB SSL | enforced for direct Postgres connections (`[remotes.production.db.ssl_enforcement]`) |
 | Templates | `supabase/templates/confirmation.html`, `recovery.html` – **commented out** in `config.toml` until SMTP exists: Supabase rejects template changes on free-tier projects using the built-in mailer |
 | MFA | TOTP enrol/verify enabled (hosted default kept) |
 | OTP length | 8 (hosted default kept) |
@@ -139,26 +136,47 @@ nationality/country only. Any `role` sent by a manipulated form is ignored; ever
 `STUDENT` (tested). Profile creation happens in the same transaction as the auth user, so a failed
 insert fails the sign-up instead of leaving an orphan.
 
-## 6. SMTP (required for production e-mail)
+## 6. Production e-mail: Resend
 
-Supabase's built-in mailer only delivers to members of the Supabase organisation and is heavily
-rate-limited: **real students will not receive confirmation or reset e-mails until SMTP is set up.**
-MCSLI must provide an SMTP service and enter it in **Dashboard → Authentication → SMTP**, or in
-`config.toml` `[auth.email.smtp]` with the password from an environment variable:
+**Provider:** Resend, team *mcsli* (signed in as admin@mcsli.org). **Domain `mcsli.org` added**
+(region eu-west-1), status *Not Started* until the DNS records below exist. Sender
+`MCSLI <no-reply@mcsli.org>`, replies to `info@mcsli.org` (`admin@mcsli.org` is a login, not a sender).
 
-| Field | Example / note |
-|---|---|
-| Host | e.g. `smtp.resend.com`, `smtp.sendgrid.net`, `smtp.zoho.com` |
-| Port | 587 (STARTTLS) or 465 (TLS) |
-| Username | provider-specific |
-| Password / API key | from the provider – never committed |
-| Sender e-mail | e.g. `no-reply@mcsli.org` |
-| Sender name | `MCSLI` |
-| DNS | SPF, DKIM and DMARC records for `mcsli.org` as instructed by the provider |
+Exact records supplied by Resend (add at the DNS host – Contabo – then click *Verify DNS Records*):
 
-Then raise **Auth → Rate limits → e-mails per hour** to suit enrolment volume, uncomment the two
-`[auth.email.template.*]` blocks in `config.toml` and run `npx supabase config push` to apply the MCSLI
-templates.
+| Type | Name | Value |
+|---|---|---|
+| TXT | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDoS814eza0s7AosWjg7r78fAfbMakktIqxme8BdO6ra+0QmtpX3mHoFQSn449LVQzBV+dly5DliVIkFYnpEKymoBEtDeELB7PSr9ut8SbneHEpwmzfRf/ThkdgX53MDjZvI4xU7MG4XEI2Bst3zbn/s3Jf/ZOBplB4OCopBlE/pwIDAQAB` |
+| CNAME | `rsend` | `rsend-euw1.forge.rmta.net` |
+| CNAME | `send` | `send.forge.rmta.net` |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` (start in monitoring mode; tighten to `quarantine` after a few weeks of clean reports) |
+
+The existing `MX 10 mail.mcsli.org` (MCSLI's own mailbox server) is untouched. Note: a wildcard A
+record currently answers every `*.mcsli.org` name; the explicit `send`/`rsend` CNAMEs take precedence.
+
+**Connecting Supabase Auth** – preferred: Resend → Settings → Integrations → *Connect to Supabase*
+(OAuth: Resend creates a sending-only API key and writes the SMTP settings into the project; nothing is
+pasted). Choose project `midvngbooepderxboqru`, sender `no-reply@mcsli.org`, name `MCSLI`.
+Manual alternative (Supabase → Authentication → SMTP): host `smtp.resend.com`, port `465`, user
+`resend`, password = a Resend API key with *sending access* for `mcsli.org`.
+
+**Link tracking:** Resend click/open tracking must stay **off** for `mcsli.org` (Resend → Domains →
+mcsli.org → Configuration) so single-use confirmation/reset/invite URLs are not rewritten. New domains
+start with tracking off; confirm after verification.
+
+**After SMTP is connected:** uncomment the three `[auth.email.template.*]` blocks in `config.toml`
+(confirmation, recovery, invite) and run `npx supabase config push`; set Auth → Rate limits →
+e-mails/hour to 100; set the `RESEND_API_KEY` Edge Function secret for transactional e-mails (§6a).
+
+### 6a. Transactional e-mail (payments)
+
+`payments` inserts/status changes queue rows in `email_outbox` (payment received / confirmed with
+receipt number / rejected with the reviewer's note). pg_cron job `mcsli-email-dispatch` calls the
+`email-dispatch` function every minute while messages are queued; the function sends via the Resend
+API and records `sent` / retries up to 5 times / `failed`. Wiring verified on production (the function
+answers `RESEND_API_KEY not configured` and messages wait). Activation = add the Edge Function secret
+`RESEND_API_KEY` (Supabase → Edge Functions → Secrets). Messages never claim an automated gateway:
+"payment received" explicitly says it is not a receipt.
 
 ## 7. Row Level Security
 
@@ -256,22 +274,40 @@ directly.
 
 ```bash
 npx supabase functions deploy identity-document-url
+npx supabase functions deploy invite-staff
+npx supabase functions deploy email-dispatch --no-verify-jwt     # pg_cron calls it with x-dispatch-secret
+npx supabase secrets set APP_SITE_URL=https://mcsli.org          # links in invitation/transactional e-mails
 npx supabase secrets set ALLOWED_ORIGINS=https://mcsli.org,https://www.mcsli.org   # optional CORS lock
 ```
+
+Secrets set on production: `APP_SITE_URL`, `DISPATCH_SECRET` (random; same value as the Vault
+secret `mcsli_dispatch_secret`; never printed). To be added by MCSLI: `RESEND_API_KEY`.
 
 `verify_jwt = true` (config.toml) makes the gateway reject unsigned calls. `SUPABASE_URL`,
 `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform.
 
 ## 11. First super admin and staff
 
-1. The person registers at `<site>/register` and confirms their e-mail.
-2. One of (both audited as `profile.super_admin_bootstrapped`; refused if a super admin exists or
-   if called through the API):
-   * SQL editor: `select public.bootstrap_super_admin('you@mcsli.org');`
-   * `DATABASE_URL='<direct connection string>' node scripts/bootstrap-super-admin.mjs you@mcsli.org`
-3. Everyone else: register normally, then **Admin → Trainers & staff** (`admin_set_user_role`).
-   Admins can grant TRAINER; only super admins grant ADMIN/SUPER_ADMIN. Assign trainers to a
-   course/cohort in the same screen.
+**First super admin – `admin@mcsli.org`** (step-by-step in LAUNCH_RUNBOOK.md):
+1. Create/confirm the Auth account through the normal secure mechanism: an invitation e-mail
+   (`auth.admin.inviteUserByEmail`, redirect `<site>/accept-invite`), where the owner of the mailbox
+   chooses the password themself.
+2. `select public.bootstrap_super_admin('admin@mcsli.org');` (SQL editor or
+   `scripts/bootstrap-super-admin.mjs`). Refused through the API, refused while the e-mail is
+   unconfirmed, refused once a super admin exists; audited as `profile.super_admin_bootstrapped`.
+3. The super admin enrols TOTP (Profile → Two-factor authentication), then turns on
+   *Require two-factor authentication for staff* (Admin → Settings; super admin only, and only from a
+   session that has passed MFA, so nobody can lock themselves out).
+
+**Everyone else – Admin → Staff → Invite staff.** SUPER_ADMIN invites ADMIN or TRAINER; ADMIN
+invites TRAINER only. The `invite-staff` function creates the invitation (7-day, single-use token;
+only its SHA-256 hash is stored) and e-mails a link; the invitee sets their own password on
+`/accept-invite` and `accept_staff_invitation()` grants the role only to the invited, confirmed
+address. Audited: `staff_invitation.created / accepted / cancelled / expired /
+rejected_wrong_account`, `staff.admin_created / trainer_created`, `profile.role_changed`,
+`staff.suspended / reactivated`. Assign trainers to courses/cohorts in Admin → Trainers.
+ADMINs cannot create, promote, demote or suspend a SUPER_ADMIN or promote themselves (tested).
+Sessions: 1-hour access tokens, rotating refresh tokens; sign-out is global.
 
 ## 12. Payments, pricing and course setup
 
@@ -284,9 +320,17 @@ npx supabase secrets set ALLOWED_ORIGINS=https://mcsli.org,https://www.mcsli.org
   optional explicit amounts, and which month needs installment N. `enroll_in_course()` computes
   the price from the student's nationality and **snapshots** it; the browser never sends a price,
   and later course price changes do not touch existing enrollments (tested).
-* **Course content**: Admin → Courses → create course, months (1..N), modules, lessons (video in
-  `course-media` or external URL + captions + transcript), practice items, quizzes/questions,
-  final exam. The `[DEMO]` seed is local-only.
+* Payment methods **cannot be enabled until their details exist** (bank: bank, account name and
+  number; MTN/Airtel: merchant code and registered merchant name) – enforced in the database.
+* **Course content**: Admin → Courses → create course (always a draft first), months (1..N),
+  modules, lessons (video upload to private `course-media` or external URL, WebVTT captions,
+  transcript, duration, thumbnail/poster, ordering, publish flag), practice items, quizzes, final
+  exam. The *Settings & fees* tab shows a publish checklist; the database refuses to publish a course
+  without a published month, a published lesson per month, a video per lesson, prices, the required
+  final exam, or with demo media. Anything with student history cannot be deleted (unpublish/archive).
+  Replacing a video uploads a new file; the previous file stays in storage until removed.
+* **Video storage:** see LAUNCH_RUNBOOK.md → "USL video". Free plan: 50 MB per upload; Pro: raise
+  the Storage upload limit and set `VITE_MAX_UPLOAD_MB`.
 
 ## 13. Rate limiting
 
@@ -313,6 +357,11 @@ npx supabase secrets set ALLOWED_ORIGINS=https://mcsli.org,https://www.mcsli.org
 * **Migration failures:** `supabase db push` stops at the failing file and prints the SQL error;
   nothing after it runs (each file is transactional).
 * Log drains to an external provider are a paid-plan feature (Dashboard → Settings → Log drains).
+* **E-mail:** Resend → Logs / Metrics (delivered, bounced, complained, suppressed); Supabase Auth logs
+  (`smtp` / `mail` errors); `select status, count(*) from email_outbox group by 1` for transactional
+  mail (admins can read `email_outbox`; it holds no credentials).
+* **Invitations:** `invite-staff` logs `invitation_sent`, `invitation_refused`, `email_failed` (never the
+  token or address).
 
 ## 15. Backups and recovery
 
@@ -348,8 +397,8 @@ refuses hosted projects unless `E2E_ALLOW_REMOTE=1` and cleans up after itself.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build      # frontend + domain
-TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 55 SQL tests
-npx supabase start && npm run test:e2e                               # 43-step HTTP end-to-end
+TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 63 SQL tests
+npx supabase start && npm run test:e2e                               # 45-step HTTP end-to-end
 npm run db:types                                                     # regenerate src/types/supabase.generated.ts
 ```
 
@@ -372,8 +421,8 @@ Removing all `[TEST]` records later (SQL editor; touches only rows created by th
 ```sql
 delete from public.courses where slug like 'test-e2e-%';            -- cascades to months, lessons, enrollments, payments…
 delete from public.payment_methods where display_name like '[TEST]%';
-delete from storage.objects where owner in (select id from auth.users where email like 'mcsli-e2e-%');
-delete from auth.users where email like 'mcsli-e2e-%';               -- cascades to profiles and their rows
+-- storage files: remove through the Storage API (direct deletes from storage.objects are blocked)
+-- accounts: keep them banned + suspended (audit rows reference them and are immutable)
 ```
 
 Audit rows referencing these accounts cannot be deleted through the API (append-only); a direct
@@ -391,14 +440,4 @@ the course, run the E2E script against staging.
 
 ## Remaining external setup
 
-1. **SMTP credentials** for e.g. `no-reply@mcsli.org` and the SPF/DKIM/DMARC DNS records (§6). Until
-   then real students cannot receive confirmation or password-reset e-mails.
-2. **Real payment details** (bank account, MTN and Airtel merchant codes), entered by an admin in
-   Admin → Settings → Payment methods; they stay disabled until then.
-3. **The first super admin**: that person registers on the deployed site, confirms their e-mail, then
-   `select public.bootstrap_super_admin('<their e-mail>');` in the SQL editor (§11).
-4. **Frontend hosting + domain** (`mcsli.org` or `learn.mcsli.org`). Build with
-   `VITE_SUPABASE_URL=https://midvngbooepderxboqru.supabase.co`, the project's anon key and
-   `VITE_SITE_URL=<final URL>`.
-5. **Plan decision**: the project is on the Free plan with **no backups** (Pro: 7 days) (§15).
-6. **Vault key escrow**: a super admin copies `mcsli_identity_key` into MCSLI's password manager (§9).
+See [LAUNCH_RUNBOOK.md](LAUNCH_RUNBOOK.md) – each item lists exactly what to click or add.

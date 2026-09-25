@@ -451,3 +451,20 @@ describe('staff MFA enforcement, payment methods, curriculum safety', () => {
     expect(await expectDenied(rows(admin, `delete from public.course_months where id = $1`, [DEMO.month1]))).toMatch(/student history/);
   });
 });
+
+describe('transactional e-mail outbox', () => {
+  it('payment submission/confirmation/rejection queue e-mails that students cannot read', async () => {
+    const before = (await client.query(`select count(*)::int as n from public.email_outbox where user_id = $1`, [bob.id])).rows[0].n;
+    const pid = await asUser(client, bob, async (q) => (await q(`select public.submit_payment($1, 'tuition', 1, $2, 1000, 'Bob', 'REF-OUTBOX', current_date, null) as id`, [bobEnrollment, methodId])).rows[0].id);
+    await asUser(client, admin, (q) => q(`select public.review_payment($1, 'rejected', '[TEST] wrong amount')`, [pid]));
+    const rows = (await client.query(`select template, status, payload from public.email_outbox where user_id = $1 order by created_at`, [bob.id])).rows.slice(before);
+    expect(rows.map((r) => r.template)).toEqual(['payment_received', 'payment_rejected']);
+    expect(rows.every((r) => r.status === 'queued')).toBe(true);
+    expect(rows[1].payload.note).toBe('[TEST] wrong amount');
+    expect(await rows_(bob)).toHaveLength(0);
+    expect((await rows_(admin)).length).toBeGreaterThan(0);
+    expect(await expectDenied(asUser(client, bob, (q) => q(`insert into public.email_outbox (to_email, template, subject) values ('x@y.z', 'payment_confirmed', 'fake')`)))).toMatch(/permission denied/);
+    expect(await expectDenied(asUser(client, admin, (q) => q(`select * from public.claim_email_batch(5)`)))).toMatch(/permission denied/);
+  });
+  const rows_ = (u: TestUser) => rows(u, `select id from public.email_outbox`);
+});
