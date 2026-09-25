@@ -137,6 +137,7 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0008_security_hardening.sql` | RLS audit fixes: function EXECUTE whitelist, scoped trainer access, moderation guards, append-only audit log, month completion rule, quiz answer withholding, audited super-admin bootstrap |
 | `0009_identity_encryption.sql` | NIN/passport numbers encrypted with a Vault key (pgcrypto AES-256) + HMAC lookup; plaintext column removed |
 | `0010_public_endpoints.sql` | rate-limited certificate verification and contact form; public site content serves only verified statistics |
+| `0011_enforce_registration_open.sql` | "Registration open" setting enforced in `enroll_in_course()` |
 
 **Hosted Supabase** (full procedure in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)). The
 Supabase CLI is a dev dependency, so no global install is needed:

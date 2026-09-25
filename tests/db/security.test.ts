@@ -141,6 +141,15 @@ describe('payments', () => {
     expect(await expectDenied(rows(alice, `select public.submit_payment($1, 'tuition', 2, $2, 1000, 'Alice', 'REF-Y', current_date, null)`, [aliceEnrollment, disabled]))).toMatch(/not available/);
   });
 
+  it('"Registration open = off" blocks new enrollments server-side; existing ones continue', async () => {
+    const late = await createUser(client, 'late@example.test', { nationality: 'ugandan' });
+    await asUser(client, admin, (q) => q(`select public.set_platform_setting('registration_open', 'false'::jsonb)`));
+    expect(await expectDenied(rows(late, `select public.enroll_in_course($1, 'full')`, [DEMO.course]))).toMatch(/Enrollment is currently closed/);
+    expect(await rows(alice, `select id from public.enrollments where id = $1`, [aliceEnrollment])).toHaveLength(1);
+    await asUser(client, admin, (q) => q(`select public.set_platform_setting('registration_open', 'true'::jsonb)`));
+    expect(await rows(late, `select public.enroll_in_course($1, 'full') as id`, [DEMO.course])).toHaveLength(1);
+  });
+
   it('the fee snapshot cannot be altered by the student and later price changes do not apply retroactively', async () => {
     expect(await asUser(client, alice, async (q) => (await q(`update public.enrollments set tuition_amount = 1 where id = $1`, [aliceEnrollment])).rowCount)).toBe(0);
     await asUser(client, admin, (q) => q(`update public.courses set tuition_national = 500000 where id = $1`, [DEMO.course]));

@@ -8,8 +8,8 @@ files in this repo; nothing is generic boilerplate.
 | Item | Status |
 |---|---|
 | Hosted Supabase project | **Not connected.** No Supabase account/token exists on the build machine; see [Remaining external setup](#remaining-external-setup). |
-| Migrations `0001`–`0010` | Applied and verified on the Supabase local stack (Postgres 17, CLI 2.117). Deterministic from scratch (`supabase db reset`), re-runnable, and upgrade-safe (existing plaintext ID numbers are encrypted in place). |
-| RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 53 database tests + 43-step HTTP end-to-end test pass. |
+| Migrations `0001`–`0011` | Applied and verified on the Supabase local stack (Postgres 17, CLI 2.117). Deterministic from scratch (`supabase db reset`), re-runnable, and upgrade-safe (existing plaintext ID numbers are encrypted in place). |
+| RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 54 database tests + 43-step HTTP end-to-end test pass. |
 | Edge Function `identity-document-url` | Served and tested on the local stack (owner / other student / trainer / anonymous / admin). |
 
 ---
@@ -20,7 +20,7 @@ files in this repo; nothing is generic boilerplate.
 supabase/
   config.toml                       CLI config: auth (e-mail confirmation, 8-char passwords, redirect
                                     URLs, templates), storage, functions, production override block
-  migrations/0001 … 0010            ordered schema history (below)
+  migrations/0001 … 0011            ordered schema history (below)
   functions/identity-document-url   audited short-lived URLs for identity scans
   templates/confirmation.html       "Confirm your MCSLI account" e-mail
   templates/recovery.html           "Reset your MCSLI password" e-mail
@@ -39,8 +39,9 @@ supabase/
 | `0008_security_hardening` | RLS audit fixes (see §7) |
 | `0009_identity_encryption` | NIN/passport numbers encrypted with a Vault key (see §9) |
 | `0010_public_endpoints` | rate limits on certificate verification + contact form; verified-only public impact stats |
+| `0011_enforce_registration_open` | the Admin → Settings "Registration open" switch now blocks new enrollments server-side |
 
-Database objects after `0010` (counted on the local stack): 36 tables (all with RLS enabled),
+Database objects after `0011` (counted on the local stack): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,
 `exam_attempts_student`, `site_content_public`), 19 enums, 84 functions, 94 table policies,
 13 storage policies, 31 triggers, 70 indexes, 6 buckets (0 public), 1 Vault secret
@@ -321,7 +322,7 @@ refuses hosted projects unless `E2E_ALLOW_REMOTE=1` and cleans up after itself.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build      # frontend + domain
-TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 53 SQL tests
+TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 54 SQL tests
 npx supabase start && npm run test:e2e                               # 43-step HTTP end-to-end
 npm run db:types                                                     # regenerate src/types/supabase.generated.ts
 ```
