@@ -291,6 +291,8 @@ export interface QuizResult {
   score: number;
   passed: boolean;
   passing_score: number;
+  /** False while retries remain on a failed attempt: correct_answer/explanation are then null. */
+  answers_revealed: boolean;
   questions: { question_id: string; correct: boolean; correct_answer: Json; explanation: string | null; your_answer: Json }[];
 }
 

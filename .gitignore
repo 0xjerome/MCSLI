@@ -30,3 +30,6 @@ dist-ssr
 # test output
 coverage
 playwright-screenshots
+# any real environment file (only the placeholder template is committed)
+.env.*
+!.env.example

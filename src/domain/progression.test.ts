@@ -113,4 +113,35 @@ describe('course progression', () => {
     expect(requiredTuitionBeforeMonth(inst, 2)).toBe(350_000);
     expect(requiredTuitionBeforeMonth(full, 1)).toBe(350_000);
   });
+
+  describe('Month 2 unlock truth table (academic AND financial)', () => {
+    const month2 = (over: Partial<ProgressionInput>) => evaluateMonthAccess(base({ monthNumber: 2, ...over }));
+    it('FULL PAYMENT + FAILED ASSESSMENT = LOCKED', () => {
+      const r = month2({ assessmentResults: { 1: 'not_passed' } });
+      expect(r.allowed).toBe(false);
+      expect(codes(r)).toEqual(['previous_month_assessment_not_passed']);
+    });
+    it('INSTALLMENT 2 CONFIRMED + FAILED ASSESSMENT = LOCKED', () => {
+      const r = month2({ schedule: inst, confirmedTuition: 350_000, assessmentResults: { 1: 'not_passed' } });
+      expect(codes(r)).toEqual(['previous_month_assessment_not_passed']);
+    });
+    it('PASSED ASSESSMENT + INSTALLMENT 2 NOT CONFIRMED = LOCKED', () => {
+      const r = month2({ schedule: inst, confirmedTuition: 175_000, assessmentResults: { 1: 'pass' } });
+      expect(codes(r)).toEqual(['installment_unconfirmed']);
+    });
+    it('PASSED ASSESSMENT + INSTALLMENT 2 CONFIRMED = UNLOCKED', () => {
+      expect(month2({ schedule: inst, confirmedTuition: 350_000, assessmentResults: { 1: 'pass' } }).allowed).toBe(true);
+    });
+    it('PASSED ASSESSMENT + FULL PAYMENT = UNLOCKED', () => {
+      expect(month2({ assessmentResults: { 1: 'pass' } }).allowed).toBe(true);
+    });
+    it('PASSED ASSESSMENT + FULL PAYMENT but Month 1 lessons/quizzes unfinished = LOCKED', () => {
+      const r = month2({ assessmentResults: { 1: 'pass' }, incompleteMonths: [1] });
+      expect(codes(r)).toEqual(['previous_month_incomplete']);
+    });
+    it('an admin override bypasses the academic conditions but never payment', () => {
+      expect(month2({ assessmentResults: { 1: 'not_passed' }, incompleteMonths: [1], overrides: [2] }).allowed).toBe(true);
+      expect(codes(month2({ schedule: inst, confirmedTuition: 175_000, overrides: [2] }))).toEqual(['installment_unconfirmed']);
+    });
+  });
 });

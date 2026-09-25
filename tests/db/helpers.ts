@@ -29,7 +29,7 @@ export function requireUrl(): string {
 
 /** Recreate schema, apply shim + migrations + dev seed. */
 export async function resetDatabase(client: pg.Client) {
-  await client.query('drop schema if exists public cascade; create schema public; drop schema if exists auth cascade; drop schema if exists storage cascade;');
+  await client.query('drop schema if exists public cascade; create schema public; drop schema if exists auth cascade; drop schema if exists storage cascade; drop schema if exists private cascade; drop schema if exists vault cascade;');
   await client.query(readFileSync(join(ROOT, 'tests/db/shim.sql'), 'utf8'));
   const dir = join(ROOT, 'supabase/migrations');
   for (const f of readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {

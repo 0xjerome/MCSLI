@@ -19,6 +19,11 @@ export interface ProgressionInput {
   assessmentResults: Record<number, AssessmentResult | undefined>;
   /** Month numbers with an active admin override. */
   overrides: number[];
+  /**
+   * Month numbers whose required lessons are not all completed or whose required quizzes are not
+   * all passed. Month N+1 stays locked until Month N is complete (and its assessment passed).
+   */
+  incompleteMonths?: number[];
   /** Whether the month has published content. */
   monthPublished?: boolean;
 }
@@ -63,14 +68,23 @@ export function financialGate(input: Pick<ProgressionInput, 'schedule' | 'confir
   return reasons;
 }
 
-export function academicGate(input: Pick<ProgressionInput, 'monthNumber' | 'assessmentResults'>): LockReason[] {
-  const { monthNumber, assessmentResults } = input;
+export function academicGate(input: Pick<ProgressionInput, 'monthNumber' | 'assessmentResults' | 'incompleteMonths'>): LockReason[] {
+  const { monthNumber, assessmentResults, incompleteMonths = [] } = input;
   if (monthNumber <= 1) return [];
   const prev = monthNumber - 1;
+  const reasons: LockReason[] = [];
+  if (incompleteMonths.includes(prev)) {
+    reasons.push({
+      code: 'previous_month_incomplete',
+      message: `Finish the required lessons and quizzes of Month ${prev} to continue.`,
+      meta: { month: prev },
+    });
+  }
   const result = assessmentResults[prev];
-  if (result === 'pass') return [];
+  if (result === 'pass') return reasons;
   if (result === 'not_passed') {
     return [
+      ...reasons,
       {
         code: 'previous_month_assessment_not_passed',
         message: `Your Month ${prev} assessment requires another attempt. Review the material and your trainer will reassess you.`,
@@ -79,6 +93,7 @@ export function academicGate(input: Pick<ProgressionInput, 'monthNumber' | 'asse
     ];
   }
   return [
+    ...reasons,
     {
       code: 'previous_month_assessment_pending',
       message: `Complete your Month ${prev} assessment to continue. Month ${monthNumber} unlocks after your trainer records a pass.`,

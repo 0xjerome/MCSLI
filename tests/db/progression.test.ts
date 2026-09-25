@@ -16,8 +16,9 @@ let admin: TestUser;
 let superAdmin: TestUser;
 let methodId: string;
 
-const access = async (user: TestUser, enrollmentId: string, month: number) =>
-  asUser(client, user, async (q) => (await q(`select public.fn_month_access($1, $2) as a`, [enrollmentId, month])).rows[0].a as { allowed: boolean; reasons: { code: string }[] });
+// fn_month_access is internal (not executable through the API); evaluate it as the database owner.
+const access = async (_user: TestUser, enrollmentId: string, month: number) =>
+  (await client.query(`select public.fn_month_access($1, $2) as a`, [enrollmentId, month])).rows[0].a as { allowed: boolean; reasons: { code: string }[] };
 
 const codes = (a: { reasons: { code: string }[] }) => a.reasons.map((r) => r.code);
 
@@ -29,6 +30,18 @@ async function pay(user: TestUser, enrollmentId: string, purpose: 'registration'
   return asUser(client, user, async (q) =>
     (await q(`select public.submit_payment($1, $2, $3, $4, $5, $6, $7, current_date, null) as id`, [enrollmentId, purpose, installment, methodId, amount, 'Test Payer', 'REF-' + Math.random().toString(36).slice(2, 8)])).rows[0].id as string,
   );
+}
+
+/** Complete every required lesson and pass every required quiz of a month, acting as the student. */
+async function completeMonth(user: TestUser, monthId: string) {
+  const lessons = (await client.query(`select l.id from public.lessons l join public.modules mo on mo.id = l.module_id where mo.month_id = $1 and l.is_required`, [monthId])).rows;
+  for (const l of lessons) await asUser(client, user, (q) => q(`select public.save_lesson_progress($1, 0, true)`, [l.id]));
+  const quizzes = (await client.query(`select id from public.quizzes where month_id = $1 and is_required`, [monthId])).rows;
+  for (const qz of quizzes) {
+    const full = (await client.query(`select id, correct_answer from public.quiz_questions where quiz_id = $1`, [qz.id])).rows;
+    const ans = Object.fromEntries(full.map((r) => [r.id, r.correct_answer]));
+    await asUser(client, user, (q) => q(`select public.submit_quiz_attempt($1, $2::jsonb)`, [qz.id, JSON.stringify(ans)]));
+  }
 }
 
 async function scheduleAndRecord(who: TestUser, enrollmentId: string, monthId: string, result: 'pass' | 'not_passed', score = 80) {
@@ -151,6 +164,13 @@ describe('academic + financial gates for month 2', () => {
     enrollmentId = (await client.query(`select id from public.enrollments where user_id = $1`, [ugStudent.id])).rows[0].id;
   });
 
+  it('month 2 also requires the month 1 lessons and quizzes to be completed', async () => {
+    const a = await access(ugStudent, enrollmentId, 2);
+    expect(a.allowed).toBe(false);
+    expect(codes(a)).toEqual(['installment_unconfirmed', 'previous_month_incomplete', 'previous_month_assessment_pending']);
+    await completeMonth(ugStudent, DEMO.month1);
+  });
+
   it('month 2 is locked while the month 1 assessment is pending', async () => {
     const a = await access(ugStudent, enrollmentId, 2);
     expect(a.allowed).toBe(false);
@@ -192,7 +212,7 @@ describe('academic + financial gates for month 2', () => {
     expect(n.rows[0].body).toMatch(/Month 2/);
     const a3 = await access(ugStudent, enrollmentId, 3);
     expect(a3.allowed).toBe(false);
-    expect(codes(a3)).toEqual(['previous_month_assessment_pending']);
+    expect(codes(a3)).toEqual(['previous_month_incomplete', 'previous_month_assessment_pending']);
   });
 
   it('a full-tuition student who passes month 1 unlocks month 2 with no installment condition', async () => {
@@ -202,6 +222,9 @@ describe('academic + financial gates for month 2', () => {
     await confirmAllPayments(client, admin, id);
     expect((await access(fullStudent, id, 2)).allowed).toBe(false);
     await scheduleAndRecord(admin, id, DEMO.month1, 'pass');
+    // FULL PAYMENT + PASS but Month 1 work unfinished = LOCKED
+    expect(codes(await access(fullStudent, id, 2))).toEqual(['previous_month_incomplete']);
+    await completeMonth(fullStudent, DEMO.month1);
     expect((await access(fullStudent, id, 2)).allowed).toBe(true);
   });
 });
@@ -244,10 +267,16 @@ describe('quizzes', () => {
     const result = await asUser(client, ugStudent, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [DEMO.quiz1, JSON.stringify(answers)])).rows[0].r);
     expect(result.score).toBe(100);
     expect(result.passed).toBe(true);
+    expect(result.answers_revealed).toBe(true);
     expect(result.questions[0].explanation).toBeTruthy();
+    // a failed attempt with retries left says WHICH answers were wrong, never what the right ones are
     const wrong = await asUser(client, ugStudent, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [DEMO.quiz1, JSON.stringify({ [qs[0].id]: 'd' })])).rows[0].r);
     expect(wrong.score).toBe(0);
-    expect(wrong.attempt_number).toBe(2);
+    expect(wrong.attempt_number).toBe(result.attempt_number + 1);
+    expect(wrong.answers_revealed).toBe(false);
+    expect(wrong.questions.every((x: { correct_answer: unknown; explanation: unknown }) => x.correct_answer === null && x.explanation === null)).toBe(true);
+    // the browser cannot choose its own score: attempts are written only by the scoring function
+    await expectDenied(asUser(client, ugStudent, (q) => q(`insert into public.quiz_attempts (quiz_id, enrollment_id, attempt_number, answers, score, passed) values ($1, $2, 99, '{}', 100, true)`, [DEMO.quiz1, enrollmentId])));
     const staffRows = await asUser(client, trainer, async (q) => (await q(`select correct_answer from public.staff_quiz_questions($1)`, [DEMO.quiz1])).rows);
     expect(staffRows).toHaveLength(3);
     const denied = await expectDenied(asUser(client, otherTrainer, (q) => q(`select public.submit_quiz_attempt($1, '{}'::jsonb)`, [DEMO.quiz1])));
@@ -261,8 +290,15 @@ describe('identity verification', () => {
     await expectDenied(asUser(client, ugStudent, (q) => q(`select public.submit_identity('passport', 'AB1234567', 'UG Student', 'Uganda', true)`)));
     await expectDenied(asUser(client, ugStudent, (q) => q(`select public.submit_identity('national_id', 'CM12345678ABCD', 'UG Student', 'Uganda', false)`)));
     await asUser(client, ugStudent, (q) => q(`select public.submit_identity('national_id', 'CM12345678ABCD', 'UG Student', 'Uganda', true)`));
-    const denied = await expectDenied(asUser(client, ugStudent, (q) => q(`select id_number from public.identity_verifications`)));
+    const denied = await expectDenied(asUser(client, ugStudent, (q) => q(`select id_number_encrypted from public.identity_verifications`)));
     expect(denied).toMatch(/permission denied/);
+    // stored encrypted: no plaintext column, ciphertext does not contain the number, HMAC for lookup
+    const raw = (await client.query(`select id_number_encrypted, id_number_hash, id_number_last4 from public.identity_verifications where user_id = $1`, [ugStudent.id])).rows[0];
+    expect(raw.id_number_last4).toBe('ABCD');
+    expect(Buffer.from(raw.id_number_encrypted).toString('latin1')).not.toContain('CM12345678');
+    expect(raw.id_number_hash).toMatch(/^[0-9a-f]{64}$/);
+    const cols = (await client.query(`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'identity_verifications'`)).rows.map((r) => r.column_name);
+    expect(cols).not.toContain('id_number');
     const summary = await asUser(client, ugStudent, async (q) => (await q(`select id_number_masked, status from public.identity_summary`)).rows);
     expect(summary).toHaveLength(1);
     expect(summary[0].id_number_masked).toBe('••••••••••ABCD');
@@ -275,8 +311,15 @@ describe('identity verification', () => {
     await expectDenied(asUser(client, trainer, (q) => q(`select public.admin_reveal_identity_number($1)`, [vid])));
     const full = await asUser(client, admin, async (q) => (await q(`select public.admin_reveal_identity_number($1) as n`, [vid])).rows[0].n);
     expect(full).toBe('CM12345678ABCD');
-    const audit = await client.query(`select count(*)::int as n from public.audit_logs where action = 'identity.number_revealed' and actor_id = $1`, [admin.id]);
-    expect(audit.rows[0].n).toBe(1);
+    const audit = await client.query(`select metadata from public.audit_logs where action = 'identity.number_revealed' and actor_id = $1`, [admin.id]);
+    expect(audit.rowCount).toBe(1);
+    expect(JSON.stringify(audit.rows[0].metadata)).not.toContain('CM12345678');
+    // exact-match search works on the HMAC and is audited without the number
+    const found = await asUser(client, admin, async (q) => (await q(`select verification_id from public.admin_find_identity_by_number($1)`, ['cm 12345678 abcd'])).rows);
+    expect(found.map((r) => r.verification_id)).toEqual([vid]);
+    await expectDenied(asUser(client, trainer, (q) => q(`select * from public.admin_find_identity_by_number($1)`, ['CM12345678ABCD'])));
+    const searchAudit = await client.query(`select metadata from public.audit_logs where action = 'identity.number_searched'`);
+    expect(JSON.stringify(searchAudit.rows)).not.toContain('CM12345678');
     // document registration path must be owned
     await expectDenied(asUser(client, ugStudent, (q) => q(`select public.register_identity_document($1, 'id.jpg', 'image/jpeg', 1000)`, [`identity-documents/${intlStudent.id}/x.jpg`])));
     await expectDenied(asUser(client, ugStudent, (q) => q(`select public.register_identity_document($1, 'id.exe', 'application/x-msdownload', 1000)`, [`identity-documents/${ugStudent.id}/x.exe`])));
@@ -354,21 +397,17 @@ describe('examinations and certificates', () => {
   });
 
   it('certificate eligibility lists missing requirements; issuing requires eligibility and admin', async () => {
-    const elig = (await client.query(`select public.fn_certificate_eligibility($1) as e`, [enrollmentId])).rows[0].e;
+    const elig = await asUser(client, fullStudent, async (q) => (await q(`select public.get_certificate_eligibility($1) as e`, [enrollmentId])).rows[0].e);
+    await expectDenied(asUser(client, ugStudent, (q) => q(`select public.get_certificate_eligibility($1)`, [enrollmentId])));
+    await expectDenied(asUser(client, fullStudent, (q) => q(`select public.fn_certificate_eligibility($1)`, [enrollmentId])));
     expect(elig.eligible).toBe(false);
     expect(elig.missing).toEqual(expect.arrayContaining(['Month 2: assessment not passed', 'Final approval pending']));
     await expectDenied(asUser(client, admin, (q) => q(`select public.issue_certificate($1)`, [enrollmentId])));
     // complete everything: lessons, quizzes, assessments 2 & 3, approval
+    // month by month: content of month N+1 only opens after month N is completed and passed
     for (const m of [DEMO.month2, DEMO.month3]) {
+      await completeMonth(fullStudent, m);
       await scheduleAndRecord(trainer, enrollmentId, m, 'pass');
-    }
-    const lessons = (await client.query(`select l.id from public.lessons l`)).rows;
-    for (const l of lessons) await asUser(client, fullStudent, (q) => q(`select public.save_lesson_progress($1, 0, true)`, [l.id]));
-    const quizzes = (await client.query(`select id from public.quizzes`)).rows;
-    for (const qz of quizzes) {
-      const full = (await client.query(`select id, correct_answer from public.quiz_questions where quiz_id = $1`, [qz.id])).rows;
-      const ans = Object.fromEntries(full.map((r) => [r.id, r.correct_answer]));
-      await asUser(client, fullStudent, (q) => q(`select public.submit_quiz_attempt($1, $2::jsonb)`, [qz.id, JSON.stringify(ans)]));
     }
     await asUser(client, trainer, (q) => q(`select public.approve_enrollment_completion($1)`, [enrollmentId]));
     const elig2 = (await client.query(`select public.fn_certificate_eligibility($1) as e`, [enrollmentId])).rows[0].e;
@@ -441,9 +480,19 @@ describe('discussions, support, notifications', () => {
 
   it('site content: public read, admin-only write via RPC', async () => {
     await expectDenied(asUser(client, ugStudent, (q) => q(`select public.set_site_content('impact_stats', '[]'::jsonb)`)));
-    await asUser(client, admin, (q) => q(`select public.set_site_content('impact_stats', '[{"label":"People trained","value":"150"}]'::jsonb)`));
-    const pub = await asUser(client, null, async (q) => (await q(`select value from public.site_content where key = 'impact_stats'`)).rows[0].value);
-    expect(pub[0].value).toBe('150');
+    await asUser(client, admin, (q) => q(`select public.set_site_content('impact_stats', $1::jsonb)`, [JSON.stringify({ asOf: '2025', stats: [
+      { label: 'People trained', value: '150', verified: true },
+      { label: 'Districts reached', value: '15+', verified: false },
+    ] })]));
+    await asUser(client, admin, (q) => q(`select public.set_site_content('contact', '{"email":"info@mcsli.org"}'::jsonb)`));
+    // the raw row (with unverified figures) is not publicly readable…
+    const raw = await asUser(client, null, async (q) => (await q(`select value from public.site_content where key = 'impact_stats'`)).rows);
+    expect(raw).toHaveLength(0);
+    // …the public view carries only verified statistics
+    const pub = await asUser(client, null, async (q) => (await q(`select key, value from public.site_content_public`)).rows);
+    const impact = pub.find((r) => r.key === 'impact_stats')!.value;
+    expect(impact.stats).toEqual([{ label: 'People trained', value: '150', verified: true }]);
+    expect(pub.find((r) => r.key === 'contact')!.value.email).toBe('info@mcsli.org');
     const stats = await asUser(client, admin, async (q) => (await q(`select public.admin_dashboard_stats() as s`)).rows[0].s);
     expect(stats.total_students).toBeGreaterThanOrEqual(3);
     expect(stats.certificates_issued).toBe(1);

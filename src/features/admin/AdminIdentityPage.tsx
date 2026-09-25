@@ -69,9 +69,9 @@ export function IdentityReviewCard({ row, onChanged }: { row: IdentityRow; onCha
     }
   };
 
-  const openDoc = async (id: string, path: string) => {
+  const openDoc = async (id: string) => {
     try {
-      window.open(await adminDocumentUrl(id, path), '_blank', 'noopener');
+      window.open(await adminDocumentUrl(id), '_blank', 'noopener');
     } catch (err) {
       toast.error('Could not open document', friendlyError(err));
     }
@@ -114,7 +114,7 @@ export function IdentityReviewCard({ row, onChanged }: { row: IdentityRow; onCha
               <span className="min-w-0 flex-1 truncate">
                 {d.file_name} <span className="text-xs text-ink-500">({humanFileSize(d.size_bytes)})</span>
               </span>
-              <Button size="sm" variant="outline" onClick={() => openDoc(d.id, d.storage_path)}>
+              <Button size="sm" variant="outline" onClick={() => openDoc(d.id)}>
                 Open (audited)
               </Button>
               <Button

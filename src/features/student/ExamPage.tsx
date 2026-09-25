@@ -5,7 +5,7 @@ import { Clock, Save, AlertTriangle } from 'lucide-react';
 import { usePageMeta } from '@/lib/seo';
 import { friendlyError } from '@/lib/supabase';
 import { useMyEnrollment } from './useEnrollment';
-import { getExam, listExamQuestions, startExamAttempt, saveExamAnswers, submitExamAttempt, type ExamStart } from '@/services/student';
+import { getExam, listExamQuestions, startExamAttempt, saveExamAnswers, submitExamAttempt, ExamTimeUpError, type ExamStart } from '@/services/student';
 import { QuestionRenderer } from '@/components/QuestionRenderer';
 import { Skeleton, ErrorState, Alert } from '@/components/ui/Misc';
 import { Button } from '@/components/ui/Button';
@@ -57,10 +57,17 @@ export default function ExamPage() {
       await saveExamAnswers(attempt.attempt_id, answers);
       dirty.current = false;
       setSaving('saved');
-    } catch {
+    } catch (e) {
+      if (e instanceof ExamTimeUpError) {
+        dirty.current = false;
+        toast.info('Time is up', e.message);
+        await qc.invalidateQueries({ queryKey: ['my-exam-attempts'] });
+        navigate('/app/exams', { replace: true });
+        return;
+      }
       setSaving('error');
     }
-  }, [attempt, answers]);
+  }, [attempt, answers, toast, qc, navigate]);
 
   // Autosave every 10 s while dirty, and on page hide.
   useEffect(() => {

@@ -156,8 +156,16 @@ export interface ExamStart {
 export async function startExamAttempt(examId: string): Promise<ExamStart> {
   return must(await sb().rpc('start_exam_attempt', { p_exam_id: examId })) as ExamStart;
 }
+export class ExamTimeUpError extends Error {
+  constructor() {
+    super('Time is up. Your examination was submitted automatically with the answers saved before the deadline.');
+    this.name = 'ExamTimeUpError';
+  }
+}
+/** Autosave. The server refuses answers after the (server-side) deadline and submits the attempt itself. */
 export async function saveExamAnswers(attemptId: string, answers: Record<string, Json>): Promise<void> {
-  must(await sb().rpc('save_exam_answers', { p_attempt_id: attemptId, p_answers: answers }));
+  const r = must(await sb().rpc('save_exam_answers', { p_attempt_id: attemptId, p_answers: answers })) as { saved: boolean; reason?: string } | null;
+  if (r && !r.saved) throw new ExamTimeUpError();
 }
 export async function submitExamAttempt(attemptId: string): Promise<{ status: string; needs_manual_grading?: boolean }> {
   return must(await sb().rpc('submit_exam_attempt', { p_attempt_id: attemptId })) as { status: string; needs_manual_grading?: boolean };
@@ -171,7 +179,7 @@ export async function listMyCertificates(): Promise<Certificate[]> {
 }
 
 export async function getCertificateEligibility(enrollmentId: string): Promise<{ eligible: boolean; missing: string[] }> {
-  return must(await sb().rpc('fn_certificate_eligibility', { p_enrollment_id: enrollmentId })) as { eligible: boolean; missing: string[] };
+  return must(await sb().rpc('get_certificate_eligibility', { p_enrollment_id: enrollmentId })) as { eligible: boolean; missing: string[] };
 }
 
 // ---------------------------------------------------------------------------

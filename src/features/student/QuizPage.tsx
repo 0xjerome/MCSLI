@@ -77,7 +77,11 @@ export default function QuizPage() {
               <p className="text-lg font-semibold text-ink-900">
                 {result.passed ? 'Passed' : 'Not passed yet'} — you scored {result.score}%
               </p>
-              <p className="mt-1 text-sm text-ink-700">{result.passed ? 'Well done. Review the explanations below to reinforce what you learned.' : `You need ${result.passing_score}% to pass. Review the explanations, then try again.`}</p>
+              <p className="mt-1 text-sm text-ink-700">{result.passed
+                  ? 'Well done. Review the explanations below to reinforce what you learned.'
+                  : result.answers_revealed
+                    ? `You need ${result.passing_score}% to pass. Review the explanations below.`
+                    : `You need ${result.passing_score}% to pass. The questions marked incorrect need another look – review the lesson material, then try again.`}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {!result.passed && !(q.max_attempts != null && mine.length >= q.max_attempts) && (
                   <Button

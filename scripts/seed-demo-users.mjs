@@ -23,8 +23,12 @@ if (!url || !key) {
   console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (never commit these).');
   process.exit(1);
 }
-if (/mcsli\.org/.test(process.env.SITE_ENV ?? '') || process.env.NODE_ENV === 'production') {
-  console.error('Refusing to seed demo users in production.');
+// Demo accounts are for local development only: refuse anything that is not a local Supabase stack
+// (supabase start → http://127.0.0.1:54321) unless explicitly allowed for a disposable staging project.
+const isLocalUrl = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/?$/.test(url);
+if (process.env.NODE_ENV === 'production' || /mcsli\.org/.test(process.env.SITE_ENV ?? '') || (!isLocalUrl && process.env.ALLOW_DEMO_SEED !== 'staging')) {
+  console.error('Refusing to seed demo users outside a local Supabase stack.');
+  console.error('For a disposable staging project only, set ALLOW_DEMO_SEED=staging. Never on production.');
   process.exit(1);
 }
 

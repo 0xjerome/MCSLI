@@ -147,22 +147,22 @@ export async function listIdentityDocumentsFor(userId: string): Promise<Identity
 export async function reviewIdentity(verificationId: string, decision: 'verified' | 'rejected', reason?: string): Promise<void> {
   must(await sb().rpc('review_identity', { p_verification_id: verificationId, p_decision: decision, p_reason: reason ?? null }));
 }
-export async function revealIdentityNumber(verificationId: string): Promise<string> {
-  return must(await sb().rpc('admin_reveal_identity_number', { p_verification_id: verificationId })) as string;
+/** Audited reveal of the full (decrypted) identification number. Never cache or persist the result. */
+export async function revealIdentityNumber(verificationId: string, reason?: string): Promise<string> {
+  return must(await sb().rpc('admin_reveal_identity_number', { p_verification_id: verificationId, p_reason: reason ?? 'identity verification review' })) as string;
 }
 /**
- * Admin access to a private identity document: goes through the audited Edge Function
- * (supabase/functions/identity-document-url) which checks the role, writes an audit row
- * and returns a 2-minute signed URL. Falls back to a direct signed URL (still RLS-protected)
- * when the function is not deployed, so verification is never blocked.
+ * Admin access to a private identity document. ONLY through the audited Edge Function
+ * (supabase/functions/identity-document-url): it authorises the caller in the database, writes the
+ * audit row first and returns a 2-minute signed URL. Storage policies no longer let admins sign
+ * identity-document URLs directly, so there is deliberately no fallback.
  */
-export async function adminDocumentUrl(documentId: string, storagePath: string): Promise<string> {
+export async function adminDocumentUrl(documentId: string): Promise<string> {
   const fn = await sb().functions.invoke('identity-document-url', { body: { document_id: documentId } });
-  if (!fn.error && fn.data?.url) return fn.data.url as string;
-  const rel = storagePath.replace(/^identity-documents\//, '');
-  const res = await sb().storage.from('identity-documents').createSignedUrl(rel, 120);
-  if (res.error) throw res.error;
-  return res.data.signedUrl;
+  if (fn.error || !fn.data?.url) {
+    throw new Error('The document could not be opened. The identity-document service may be unavailable; try again or contact the platform administrator.');
+  }
+  return fn.data.url as string;
 }
 export async function adminDeleteIdentityDocument(documentId: string): Promise<void> {
   must(await sb().rpc('delete_identity_document', { p_document_id: documentId }));
@@ -392,7 +392,7 @@ export async function reissueCertificate(id: string, reason: string, studentName
   return must(await sb().rpc('reissue_certificate', { p_certificate_id: id, p_reason: reason, p_student_name: studentName ?? null })) as string;
 }
 export async function certificateEligibility(enrollmentId: string): Promise<{ eligible: boolean; missing: string[] }> {
-  return must(await sb().rpc('fn_certificate_eligibility', { p_enrollment_id: enrollmentId })) as { eligible: boolean; missing: string[] };
+  return must(await sb().rpc('get_certificate_eligibility', { p_enrollment_id: enrollmentId })) as { eligible: boolean; missing: string[] };
 }
 
 // ---------------------------------------------------------------------------

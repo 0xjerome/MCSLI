@@ -37,7 +37,7 @@ export function mergeContent(rows: { key: string; value: unknown }[] | null | un
 async function fetchContent(): Promise<SiteContent> {
   if (!isSupabaseConfigured) return defaultContent;
   try {
-    const { data, error } = await getSupabase().from('site_content').select('key, value').eq('is_public', true);
+    const { data, error } = await getSupabase().from('site_content_public').select('key, value');
     if (error) throw error;
     return mergeContent(data as { key: string; value: unknown }[]);
   } catch {

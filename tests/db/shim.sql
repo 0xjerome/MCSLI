@@ -9,6 +9,25 @@ do $$ begin create role service_role nologin bypassrls; exception when duplicate
 create schema if not exists auth;
 create schema if not exists storage;
 create schema if not exists extensions;
+-- Hosted Supabase installs pgcrypto into `extensions`; do the same so search_path bugs surface here.
+create extension if not exists pgcrypto with schema extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
+-- Supabase sessions use search_path "$user", public, extensions (runtime functions pin their own).
+select set_config('search_path', '"$user", public, extensions', false);
+
+-- Supabase Vault emulation (secrets stored in plain text here – test databases only).
+create schema if not exists vault;
+create table if not exists vault.secrets (
+  id uuid primary key default gen_random_uuid(),
+  name text unique,
+  description text,
+  secret text not null,
+  created_at timestamptz default now()
+);
+create or replace view vault.decrypted_secrets as select id, name, description, secret, secret as decrypted_secret, created_at from vault.secrets;
+create or replace function vault.create_secret(new_secret text, new_name text default null, new_description text default '') returns uuid
+language sql as $$ insert into vault.secrets (name, description, secret) values (new_name, new_description, new_secret) returning id $$;
+revoke all on schema vault from public;
 
 create table if not exists auth.users (
   id uuid primary key,
