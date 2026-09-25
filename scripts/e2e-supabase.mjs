@@ -43,7 +43,8 @@ if (!isLocal && process.env.E2E_ALLOW_REMOTE !== '1') {
 const SITE = process.env.E2E_SITE_URL ?? 'http://localhost:5173';
 const RUN = Date.now().toString(36);
 const DOMAIN = process.env.E2E_EMAIL_DOMAIN ?? 'mcsli-e2e.test';
-const PASSWORD = `E2e-${RUN}-Pass!9`;
+// Random per run and never printed, so leftover [TEST] accounts cannot be logged into from the logs.
+const PASSWORD = `E2e-${crypto.randomUUID()}-Aa9!`;
 const email = (who) => `mcsli-e2e-${who}-${RUN}@${DOMAIN}`;
 
 // ---------------------------------------------------------------------------
@@ -118,17 +119,22 @@ async function followVerify(link) {
 
 async function signUp(who, fullName, nationality = 'ugandan', extraMeta = {}) {
   const c = newClient();
-  const r = await c.auth.signUp({
-    email: email(who),
-    password: PASSWORD,
-    options: { emailRedirectTo: `${SITE}/login?verified=1`, data: { full_name: fullName, nationality, country: nationality === 'ugandan' ? 'Uganda' : 'Kenya', phone: '', ...extraMeta } },
-  });
+  const data = { full_name: fullName, nationality, country: nationality === 'ugandan' ? 'Uganda' : 'Kenya', phone: '', ...extraMeta };
+  if (!cfg.mail) {
+    // Hosted project without custom SMTP: Supabase's built-in mailer only delivers to project team
+    // members, so the account is created through the Auth admin API (same auth.users insert, same
+    // profile trigger) and confirmation links are generated server-side. Nothing is e-mailed.
+    const r = await service.auth.admin.createUser({ email: email(who), password: PASSWORD, email_confirm: false, user_metadata: data });
+    ok(r, `create ${who}`);
+    return { client: c, id: r.data.user.id, email: email(who) };
+  }
+  const r = await c.auth.signUp({ email: email(who), password: PASSWORD, options: { emailRedirectTo: `${SITE}/login?verified=1`, data } });
   ok(r, `sign up ${who}`);
   return { client: c, id: r.data.user.id, email: email(who) };
 }
 async function confirmEmail(user) {
   if (cfg.mail) {
-    const mail = await waitForMail(user.email, /Confirm your MCSLI account/);
+    const mail = await waitForMail(user.email, /confirm/i);
     const location = await followVerify(linkFrom(mail.HTML));
     const u = new URL(location, SITE);
     assert(u.origin + u.pathname === `${SITE}/login` && u.searchParams.get('verified') === '1' && !u.searchParams.get('error'), `confirmation redirected to ${location.replace(/(code|token|access_token|refresh_token)=[^&#]+/g, '$1=…')}`);
@@ -190,10 +196,11 @@ await step('token refresh issues a new access token', async () => {
 });
 await step('forgot password → e-mail link → /reset-password → new password works', async () => {
   const c = newClient();
-  ok(await c.auth.resetPasswordForEmail(ctx.student.email, { redirectTo: `${SITE}/reset-password` }), 'reset request');
+  // with the built-in mailer the reset e-mail cannot be sent to a test address; the link is generated instead
+  if (cfg.mail) ok(await c.auth.resetPasswordForEmail(ctx.student.email, { redirectTo: `${SITE}/reset-password` }), 'reset request');
   let location;
   if (cfg.mail) {
-    const mail = await waitForMail(ctx.student.email, /Reset your MCSLI password/);
+    const mail = await waitForMail(ctx.student.email, /reset/i);
     location = await followVerify(linkFrom(mail.HTML));
   } else {
     const r = ok(await service.auth.admin.generateLink({ type: 'recovery', email: ctx.student.email, options: { redirectTo: `${SITE}/reset-password` } }), 'generateLink');
@@ -644,7 +651,11 @@ await step('unpublish [TEST] course, disable [TEST] payment method, demote + sus
   if (staff.length) ok(await service.from('profiles').update({ role: 'STUDENT', account_status: 'suspended' }).in('id', staff), 'demote staff');
   const left = ok(await service.from('profiles').select('id').in('id', staff).neq('role', 'STUDENT'), 'check');
   assert(left.length === 0, 'no privileged [TEST] accounts remain');
-  return `${staff.length} [TEST] staff accounts demoted`;
+  // every [TEST] account is banned from signing in again (records stay for inspection)
+  const all = [ctx.student, ctx.other, ctx.super, ctx.admin, ctx.trainer].filter(Boolean);
+  for (const u of all) ok(await service.auth.admin.updateUserById(u.id, { ban_duration: '876000h' }), `ban ${u.email}`);
+  ok(await service.from('profiles').update({ account_status: 'suspended' }).in('id', all.map((u) => u.id)), 'suspend all');
+  return `${staff.length} [TEST] staff demoted; ${all.length} [TEST] accounts banned + suspended`;
 });
 
 const failed = results.filter((r) => !r.ok);

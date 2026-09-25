@@ -12,8 +12,9 @@ create schema if not exists extensions;
 -- Hosted Supabase installs pgcrypto into `extensions`; do the same so search_path bugs surface here.
 create extension if not exists pgcrypto with schema extensions;
 grant usage on schema extensions to anon, authenticated, service_role;
--- Supabase sessions use search_path "$user", public, extensions (runtime functions pin their own).
-select set_config('search_path', '"$user", public, extensions', false);
+-- Hosted Supabase runs migrations with search_path "$user", public – WITHOUT `extensions` – so any
+-- unqualified pgcrypto call in a migration must fail here too (runtime functions pin their own path).
+select set_config('search_path', '"$user", public', false);
 
 -- Supabase Vault emulation (secrets stored in plain text here – test databases only).
 create schema if not exists vault;

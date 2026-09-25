@@ -243,5 +243,5 @@ end $$;
 
 create or replace function public.fn_generate_receipt_number() returns text
 language sql as $$
-  select 'RCPT-' || to_char(now(), 'YYYYMM') || '-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8));
+  select 'RCPT-' || to_char(now(), 'YYYYMM') || '-' || upper(substr(encode(extensions.gen_random_bytes(4), 'hex'), 1, 8));
 $$;

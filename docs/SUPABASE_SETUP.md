@@ -7,6 +7,15 @@ files in this repo; nothing is generic boilerplate.
 
 | Item | Status |
 |---|---|
+| Hosted project | **Connected**: `admin@mcsli.org's Project`, ref `midvngbooepderxboqru`, region eu-west-1 (Ireland), Postgres 17.6, organisation *MasterCLass*, **Free plan**. The project was empty before deployment (0 users, 0 tables, 0 buckets). |
+| Migrations `0001`–`0012` | Applied with `supabase db push` and recorded in `supabase_migrations`. Remote objects match local exactly (36 tables all with RLS, 6 views, 84 functions, 94 + 13 policies, 6 private buckets, Vault key). No seed/demo data. |
+| Edge Function `identity-document-url` | Deployed (v1, `verify_jwt = true`), tested on the hosted project. |
+| Auth | Site URL `https://mcsli.org`, 6 redirect URLs (`/login`, `/reset-password` on `mcsli.org`, `www.`, `learn.`), 8-character minimum password, e-mail confirmation on, TOTP MFA available. **Custom e-mail templates and real e-mail delivery need SMTP** (§6). |
+| Tests | Hosted E2E **43/43**; local E2E 43/43; 55 database tests; Supabase security advisor reviewed (§7). |
+| Backups | **None** – verified in Dashboard → Database → Backups: "Free Plan does not include project backups" (§15). |
+| Test data left in production | 5 `[TEST]` accounts (`mcsli-e2e-…@mcsli-e2e.test`, **banned and suspended**, staff roles removed), one archived/unpublished `[TEST] E2E Course …`, a disabled `[TEST] MTN …` payment method, 2 `[TEST]` files in private buckets, and their audit rows. Removal SQL in §17. |
+
+---|---|
 | Hosted Supabase project | **Not connected.** No Supabase account/token exists on the build machine; see [Remaining external setup](#remaining-external-setup). |
 | Migrations `0001`–`0011` | Applied and verified on the Supabase local stack (Postgres 17, CLI 2.117). Deterministic from scratch (`supabase db reset`), re-runnable, and upgrade-safe (existing plaintext ID numbers are encrypted in place). |
 | RLS / security | Audited; 11 classes of issues fixed in `0008`–`0010`; 55 database tests + 43-step HTTP end-to-end test pass. |
@@ -20,7 +29,7 @@ files in this repo; nothing is generic boilerplate.
 supabase/
   config.toml                       CLI config: auth (e-mail confirmation, 8-char passwords, redirect
                                     URLs, templates), storage, functions, production override block
-  migrations/0001 … 0011            ordered schema history (below)
+  migrations/0001 … 0012            ordered schema history (below)
   functions/identity-document-url   audited short-lived URLs for identity scans
   templates/confirmation.html       "Confirm your MCSLI account" e-mail
   templates/recovery.html           "Reset your MCSLI password" e-mail
@@ -40,8 +49,9 @@ supabase/
 | `0009_identity_encryption` | NIN/passport numbers encrypted with a Vault key (see §9) |
 | `0010_public_endpoints` | rate limits on certificate verification + contact form; verified-only public impact stats |
 | `0011_enforce_registration_open` | the Admin → Settings "Registration open" switch now blocks new enrollments server-side |
+| `0012_advisor_fixes` | Supabase advisor follow-ups: pinned search_path on 6 helpers, no EXECUTE on trigger functions, documented intentional SECURITY DEFINER views |
 
-Database objects after `0011` (counted on the local stack): 36 tables (all with RLS enabled),
+Database objects after `0012` (identical on the local stack and the hosted project): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,
 `exam_attempts_student`, `site_content_public`), 19 enums, 84 functions, 94 table policies,
 13 storage policies, 31 triggers, 70 indexes, 6 buckets (0 public), 1 Vault secret
@@ -96,8 +106,11 @@ npx supabase db push               # applies them in order, records them in supa
 * `0008`–`0010` only use `create or replace`, `drop policy if exists`, `revoke/grant` and guarded
   `do` blocks. `0009` encrypts existing identity rows before dropping the plaintext column; this
   was tested on a database containing plaintext rows.
-* **Before any production migration:** take a backup (§14), run `--dry-run`, apply to a staging
+* **Before any production migration:** take a backup (§15), run `--dry-run`, apply to a staging
   project first when one exists.
+* Hosted Supabase runs migrations with `search_path = "$user", public` (no `extensions`), unlike the
+  local stack. Always schema-qualify extension functions (`extensions.gen_random_bytes`, …). The
+  test shim (`tests/db/shim.sql`) now uses the hosted search path so this fails in `npm run test:db`.
 
 ## 5. Auth configuration
 
@@ -111,7 +124,9 @@ after filling in `[remotes.production]` (bottom of the file) with the project re
 | Resend throttle | 60 s |
 | Site URL | `https://mcsli.org` (production), `http://localhost:5173` (local) |
 | Redirect allow-list | `<site>/login`, `<site>/reset-password` (+ `www.` and localhost variants) |
-| Templates | `supabase/templates/confirmation.html`, `recovery.html` |
+| Templates | `supabase/templates/confirmation.html`, `recovery.html` – **commented out** in `config.toml` until SMTP exists: Supabase rejects template changes on free-tier projects using the built-in mailer |
+| MFA | TOTP enrol/verify enabled (hosted default kept) |
+| OTP length | 8 (hosted default kept) |
 | Flow | PKCE (`src/lib/supabase.ts`), session persisted + auto-refreshed |
 
 The app builds redirect links from `VITE_SITE_URL` (`src/features/auth/AuthProvider.tsx`):
@@ -126,8 +141,9 @@ insert fails the sign-up instead of leaving an orphan.
 
 ## 6. SMTP (required for production e-mail)
 
-Supabase's built-in mailer is for testing only (heavily rate-limited, not for real users). MCSLI
-must provide an SMTP service and enter it in **Dashboard → Authentication → SMTP**, or in
+Supabase's built-in mailer only delivers to members of the Supabase organisation and is heavily
+rate-limited: **real students will not receive confirmation or reset e-mails until SMTP is set up.**
+MCSLI must provide an SMTP service and enter it in **Dashboard → Authentication → SMTP**, or in
 `config.toml` `[auth.email.smtp]` with the password from an environment variable:
 
 | Field | Example / note |
@@ -140,7 +156,9 @@ must provide an SMTP service and enter it in **Dashboard → Authentication → 
 | Sender name | `MCSLI` |
 | DNS | SPF, DKIM and DMARC records for `mcsli.org` as instructed by the provider |
 
-Then raise **Auth → Rate limits → e-mails per hour** to suit enrolment volume.
+Then raise **Auth → Rate limits → e-mails per hour** to suit enrolment volume, uncomment the two
+`[auth.email.template.*]` blocks in `config.toml` and run `npx supabase config push` to apply the MCSLI
+templates.
 
 ## 7. Row Level Security
 
@@ -173,6 +191,13 @@ functions that re-check the caller and write `audit_logs`.
     shim now installs pgcrypto in `extensions` like Supabase.
 11. Reissuing a revoked certificate skipped eligibility; ADMINs could suspend SUPER_ADMINs; an
     autosave after the exam deadline rolled back the automatic submission. → fixed.
+
+**Supabase security advisor on the hosted project (after `0012`):** 0 unexpected findings. Remaining
+items are intentional: 4 × `security_definer_view` (the four filtered views listed in `0012` – the base
+tables deny direct reads, so they cannot be invoker views), 76 × `*_security_definer_function_executable`
+(exactly the EXECUTE whitelist; each function re-checks the caller), and 194 performance
+warnings (`auth_rls_initplan`, `multiple_permissive_policies`) that are negligible at MCSLI's scale; revisit
+by wrapping `auth.uid()` as `(select auth.uid())` if query volume grows.
 
 **Role matrix (enforced in SQL, tested as each role):**
 
@@ -291,9 +316,10 @@ npx supabase secrets set ALLOWED_ORIGINS=https://mcsli.org,https://www.mcsli.org
 
 ## 15. Backups and recovery
 
-Not verified – no project exists yet. Per Supabase's plans at the time of writing: **Free** has no
-downloadable backups; **Pro** keeps daily backups for 7 days; **Point-in-Time Recovery** is a paid
-add-on. Check Dashboard → Database → Backups once the project exists.
+**Verified on the hosted project: no backups.** Dashboard → Database → Backups states "Free Plan does
+not include project backups". Upgrading to **Pro** gives 7 days of daily backups; **Point-in-Time
+Recovery** is a paid add-on. Until then, take manual dumps (below) before every change and regularly
+once real students are enrolled.
 
 * Database backups do **not** include Storage files (identity scans, receipts, videos). Export
   buckets separately (S3-compatible API or `supabase storage` CLI) on a schedule.
@@ -330,13 +356,28 @@ npm run db:types                                                     # regenerat
 `src/types/schema-contract.ts` makes `npm run typecheck` fail if a hand-written row type or an RPC
 name used by the app no longer exists in the generated schema.
 
-Against staging/production (creates `[TEST]` records, cleans up privileged ones):
+Against staging/production (creates `[TEST]` records; afterwards all `[TEST]` accounts are banned and
+suspended, staff roles removed, the course unpublished and the payment method disabled). Without
+SMTP the script creates accounts through the Auth admin API and follows server-generated
+confirmation/reset links instead of reading e-mail:
 
 ```bash
 SUPABASE_URL=https://<ref>.supabase.co SUPABASE_ANON_KEY=… SUPABASE_SERVICE_ROLE_KEY=… \
 E2E_ALLOW_REMOTE=1 E2E_EMAIL_DOMAIN=<domain you control> E2E_SITE_URL=https://mcsli.org \
 node scripts/e2e-supabase.mjs
 ```
+
+Removing all `[TEST]` records later (SQL editor; touches only rows created by the script):
+
+```sql
+delete from public.courses where slug like 'test-e2e-%';            -- cascades to months, lessons, enrollments, payments…
+delete from public.payment_methods where display_name like '[TEST]%';
+delete from storage.objects where owner in (select id from auth.users where email like 'mcsli-e2e-%');
+delete from auth.users where email like 'mcsli-e2e-%';               -- cascades to profiles and their rows
+```
+
+Audit rows referencing these accounts cannot be deleted through the API (append-only); a direct
+session can remove them if required.
 
 ## 18. Deployment
 
@@ -350,10 +391,14 @@ the course, run the E2E script against staging.
 
 ## Remaining external setup
 
-1. **Supabase access** – a project and a way to authenticate the CLI (`npx supabase login` on the
-   deploying machine, or `SUPABASE_ACCESS_TOKEN`), plus the database password for `link`.
-2. **SMTP credentials** for `no-reply@mcsli.org` (§6) and the DNS records.
-3. **Real payment details** (bank account, MTN and Airtel merchant codes) entered by an admin.
-4. **The first super admin's e-mail address.**
-5. **Production domain decision** (`mcsli.org` vs `learn.mcsli.org`) and the frontend host.
-6. **Plan choice** for backups/PITR (§15).
+1. **SMTP credentials** for e.g. `no-reply@mcsli.org` and the SPF/DKIM/DMARC DNS records (§6). Until
+   then real students cannot receive confirmation or password-reset e-mails.
+2. **Real payment details** (bank account, MTN and Airtel merchant codes), entered by an admin in
+   Admin → Settings → Payment methods; they stay disabled until then.
+3. **The first super admin**: that person registers on the deployed site, confirms their e-mail, then
+   `select public.bootstrap_super_admin('<their e-mail>');` in the SQL editor (§11).
+4. **Frontend hosting + domain** (`mcsli.org` or `learn.mcsli.org`). Build with
+   `VITE_SUPABASE_URL=https://midvngbooepderxboqru.supabase.co`, the project's anon key and
+   `VITE_SITE_URL=<final URL>`.
+5. **Plan decision**: the project is on the Free plan with **no backups** (Pro: 7 days) (§15).
+6. **Vault key escrow**: a super admin copies `mcsli_identity_key` into MCSLI's password manager (§9).

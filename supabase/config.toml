@@ -237,7 +237,7 @@ secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "60s"
 # Number of characters used in the email OTP.
-otp_length = 6
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -251,13 +251,16 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-[auth.email.template.confirmation]
-subject = "Confirm your MCSLI account"
-content_path = "./supabase/templates/confirmation.html"
-
-[auth.email.template.recovery]
-subject = "Reset your MCSLI password"
-content_path = "./supabase/templates/recovery.html"
+# MCSLI e-mail templates (supabase/templates/*.html). Supabase refuses template changes on free-tier
+# projects that use the built-in mailer, so these stay disabled until MCSLI's SMTP is configured
+# ([auth.email.smtp] below / Dashboard → Authentication → SMTP). Then uncomment and `config push`.
+# [auth.email.template.confirmation]
+# subject = "Confirm your MCSLI account"
+# content_path = "./supabase/templates/confirmation.html"
+#
+# [auth.email.template.recovery]
+# subject = "Reset your MCSLI password"
+# content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
@@ -311,8 +314,9 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+# matches the hosted default: staff may enrol an authenticator app
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
@@ -439,17 +443,22 @@ verify_jwt = true
 # so production URLs are overridden here instead of editing the local values above.
 # Fill in project_id with the real project ref when the project exists (see docs/SUPABASE_SETUP.md).
 # ---------------------------------------------------------------------------
-# [remotes.production]
-# project_id = "<project-ref>"
-#
-# [remotes.production.auth]
-# site_url = "https://mcsli.org"
-# additional_redirect_urls = [
-#   "https://mcsli.org/login",
-#   "https://mcsli.org/reset-password",
-#   "https://www.mcsli.org/login",
-#   "https://www.mcsli.org/reset-password",
-# ]
-#
-# [remotes.production.db.seed]
-# enabled = false
+[remotes.production]
+project_id = "midvngbooepderxboqru"
+
+[remotes.production.auth]
+site_url = "https://mcsli.org"
+# Production redirect allow-list: the app's /login (e-mail confirmation) and /reset-password pages
+# on the public domain and the reserved learning subdomain. localhost is deliberately NOT allowed
+# in production.
+additional_redirect_urls = [
+  "https://mcsli.org/login",
+  "https://mcsli.org/reset-password",
+  "https://www.mcsli.org/login",
+  "https://www.mcsli.org/reset-password",
+  "https://learn.mcsli.org/login",
+  "https://learn.mcsli.org/reset-password",
+]
+
+[remotes.production.db.seed]
+enabled = false

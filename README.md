@@ -138,8 +138,9 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0009_identity_encryption.sql` | NIN/passport numbers encrypted with a Vault key (pgcrypto AES-256) + HMAC lookup; plaintext column removed |
 | `0010_public_endpoints.sql` | rate-limited certificate verification and contact form; public site content serves only verified statistics |
 | `0011_enforce_registration_open.sql` | "Registration open" setting enforced in `enroll_in_course()` |
+| `0012_advisor_fixes.sql` | Supabase security-advisor follow-ups (pinned search_path, no EXECUTE on trigger functions) |
 
-**Hosted Supabase** (full procedure in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)). The
+**Hosted Supabase** – the production project `midvngbooepderxboqru` (eu-west-1) is linked and all migrations and the Edge Function are deployed; status and remaining steps are in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md). The
 Supabase CLI is a dev dependency, so no global install is needed:
 
 ```bash
