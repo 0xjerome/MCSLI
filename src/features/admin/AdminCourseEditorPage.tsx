@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, Video, ListChecks, Hand } from 'lucide-react';
 import { usePageMeta } from '@/lib/seo';
 import { friendlyError } from '@/lib/supabase';
-import { getCourse, listMonths, saveMonth, listModules, saveModule, deleteModule, saveLesson, deleteLesson, listPractice, savePractice, deletePractice, listQuizzesForMonth, saveQuiz, deleteQuiz, listQuizQuestionsStaff, saveQuizQuestion, deleteQuizQuestion, uploadCourseMedia } from '@/services/staff';
+import { getCourse, listMonths, saveMonth, listModules, saveModule, deleteModule, saveLesson, deleteLesson, listPractice, savePractice, deletePractice, listQuizzesForMonth, saveQuiz, deleteQuiz, listQuizQuestionsStaff, saveQuizQuestion, deleteQuizQuestion, uploadCourseMedia, validateCourseMedia, getCoursePublishProblems, COURSE_MEDIA_TYPES } from '@/services/staff';
 import { CourseForm } from './AdminCoursesPage';
 import { QuestionEditor, type QuestionDraft } from '@/features/staff/QuestionEditor';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -45,6 +45,7 @@ export default function AdminCourseEditorPage() {
       <Tabs aria-label="Course sections" value={tab} onChange={setTab} className="mt-4" tabs={[{ id: 'curriculum', label: 'Curriculum' }, { id: 'settings', label: 'Settings & fees' }]} />
 
       <TabPanel id="settings" value={tab} className="mt-6">
+        {!c.is_published && !c.is_archived && <PublishChecklist courseId={c.id} />}
         <Card>
           <CourseForm initial={c} onCancel={() => setTab('curriculum')} onSaved={async () => { await course.refetch(); await qc.invalidateQueries({ queryKey: ['staff-courses'] }); toast.success('Course saved'); }} />
         </Card>
@@ -123,7 +124,11 @@ function MonthsSidebar({ courseId, months, activeId, onSelect, onChanged }: { co
   );
 }
 
-function MediaField({ name, label, defaultValue, prefix }: { name: string; label: string; defaultValue?: string | null; prefix: string }) {
+// Upload limit per file. Supabase's Free plan caps uploads at 50 MB; on Pro raise the project's
+// Storage upload limit and set VITE_MAX_UPLOAD_MB accordingly.
+const MAX_UPLOAD_BYTES = (Number(import.meta.env.VITE_MAX_UPLOAD_MB) || 50) * 1024 * 1024;
+
+function MediaField({ name, label, defaultValue, prefix, kind }: { name: string; label: string; defaultValue?: string | null; prefix: string; kind: keyof typeof COURSE_MEDIA_TYPES }) {
   const toast = useToast();
   const [value, setValue] = useState(defaultValue ?? '');
   const [busy, setBusy] = useState(false);
@@ -134,13 +139,14 @@ function MediaField({ name, label, defaultValue, prefix }: { name: string; label
         <Upload className="h-4 w-4" aria-hidden="true" /> {busy ? 'Uploading…' : 'Upload'}
         <input
           type="file"
-          accept="video/*,.vtt,text/vtt"
+          accept={kind === 'captions' ? '.vtt,text/vtt' : COURSE_MEDIA_TYPES[kind]!.join(',')}
           className="sr-only"
           disabled={busy}
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
-            if (f.size > 2 * 1024 * 1024 * 1024) return toast.error('File too large', 'Maximum 2 GB.');
+            const problem = validateCourseMedia(f, kind, MAX_UPLOAD_BYTES);
+            if (problem) return toast.error('File not accepted', problem);
             setBusy(true);
             try {
               setValue(await uploadCourseMedia(f, prefix));
@@ -352,6 +358,7 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
                     video_url: video.url,
                     video_path: video.path,
                     captions_path: captions || null,
+                    thumbnail_path: String(fd.get('thumbnail')).trim() || null,
                     transcript: String(fd.get('transcript')).trim() || null,
                     duration_seconds: Number(fd.get('duration_seconds')) || null,
                     is_published: fd.get('is_published') === 'on',
@@ -371,8 +378,9 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
             </div>
             <Textarea name="description" label="Description" optionalLabel rows={2} defaultValue={lessonEdit.description ?? ''} />
             <Textarea name="objectives" label="Learning objectives (one per line)" optionalLabel rows={3} defaultValue={(lessonEdit.objectives ?? []).join('\n')} />
-            <MediaField name="video" label="Lesson video" defaultValue={lessonEdit.video_url ?? lessonEdit.video_path} prefix={`lessons/${lessonEdit.module_id}`} />
-            <MediaField name="captions" label="Captions (WebVTT)" defaultValue={lessonEdit.captions_path} prefix={`captions/${lessonEdit.module_id}`} />
+            <MediaField kind="video" name="video" label="Lesson video" defaultValue={lessonEdit.video_url ?? lessonEdit.video_path} prefix={`lessons/${lessonEdit.module_id}`} />
+            <MediaField kind="captions" name="captions" label="Captions (WebVTT)" defaultValue={lessonEdit.captions_path} prefix={`captions/${lessonEdit.module_id}`} />
+            <MediaField kind="image" name="thumbnail" label="Thumbnail (poster shown before playback)" defaultValue={lessonEdit.thumbnail_path} prefix={`thumbnails/${lessonEdit.module_id}`} />
             <Textarea name="transcript" label="Transcript" optionalLabel rows={4} defaultValue={lessonEdit.transcript ?? ''} hint="Required for accessibility — describe what is signed." />
             <div className="flex gap-6">
               <Checkbox name="is_published" label="Published" defaultChecked={lessonEdit.is_published ?? true} />
@@ -398,7 +406,7 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               const video = splitMedia(String(fd.get('video')));
-              if (await run(() => savePractice({ id: practiceEdit.id, month_id: month.id, position: Number(fd.get('position')) || 1, title: String(fd.get('title')).trim(), description: String(fd.get('description')).trim() || null, movement_notes: String(fd.get('movement_notes')).trim() || null, video_url: video.url, video_path: video.path, is_published: fd.get('is_published') === 'on' }), 'Practice item saved', practice.refetch)) setPracticeEdit(null);
+              if (await run(() => savePractice({ id: practiceEdit.id, month_id: month.id, position: Number(fd.get('position')) || 1, title: String(fd.get('title')).trim(), description: String(fd.get('description')).trim() || null, movement_notes: String(fd.get('movement_notes')).trim() || null, video_url: video.url, video_path: video.path, thumbnail_path: String(fd.get('thumbnail')).trim() || null, is_published: fd.get('is_published') === 'on' }), 'Practice item saved', practice.refetch)) setPracticeEdit(null);
             }}
             className="space-y-4"
           >
@@ -408,7 +416,8 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
             </div>
             <Textarea name="description" label="Description" optionalLabel rows={2} defaultValue={practiceEdit.description ?? ''} />
             <Textarea name="movement_notes" label="Key movement notes" optionalLabel rows={3} defaultValue={practiceEdit.movement_notes ?? ''} />
-            <MediaField name="video" label="Reference video" defaultValue={practiceEdit.video_url ?? practiceEdit.video_path} prefix={`practice/${month.id}`} />
+            <MediaField kind="video" name="video" label="Reference video" defaultValue={practiceEdit.video_url ?? practiceEdit.video_path} prefix={`practice/${month.id}`} />
+            <MediaField kind="image" name="thumbnail" label="Thumbnail" defaultValue={practiceEdit.thumbnail_path} prefix={`thumbnails/practice-${month.id}`} />
             <Checkbox name="is_published" label="Published" defaultChecked={practiceEdit.is_published ?? true} />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setPracticeEdit(null)}>
@@ -533,5 +542,25 @@ function QuizQuestionsDialog({ quiz, onClose }: { quiz: Quiz; onClose: () => voi
         </>
       )}
     </Dialog>
+  );
+}
+
+/** Shows what still blocks publishing (the database refuses to publish an incomplete course). */
+function PublishChecklist({ courseId }: { courseId: string }) {
+  const problems = useQuery({ queryKey: ['publish-problems', courseId], queryFn: () => getCoursePublishProblems(courseId) });
+  if (problems.isLoading || problems.isError) return null;
+  const list = problems.data ?? [];
+  return (
+    <Alert tone={list.length ? 'warning' : 'success'} className="mb-4" title={list.length ? 'Before this course can be published' : 'Ready to publish'}>
+      {list.length ? (
+        <ul className="list-disc pl-5 text-sm">
+          {list.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm">All required content is in place. Tick "Published" below to open enrollment.</p>
+      )}
+    </Alert>
   );
 }

@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       assessment_attempts: {
@@ -1450,6 +1445,7 @@ export type Database = {
           module_id: string
           objectives: string[]
           position: number
+          thumbnail_path: string | null
           title: string
           transcript: string | null
           updated_at: string
@@ -1467,6 +1463,7 @@ export type Database = {
           module_id: string
           objectives?: string[]
           position?: number
+          thumbnail_path?: string | null
           title: string
           transcript?: string | null
           updated_at?: string
@@ -1484,6 +1481,7 @@ export type Database = {
           module_id?: string
           objectives?: string[]
           position?: number
+          thumbnail_path?: string | null
           title?: string
           transcript?: string | null
           updated_at?: string
@@ -1891,6 +1889,7 @@ export type Database = {
           month_id: string
           movement_notes: string | null
           position: number
+          thumbnail_path: string | null
           title: string
           video_path: string | null
           video_url: string | null
@@ -1903,6 +1902,7 @@ export type Database = {
           month_id: string
           movement_notes?: string | null
           position?: number
+          thumbnail_path?: string | null
           title: string
           video_path?: string | null
           video_url?: string | null
@@ -1915,6 +1915,7 @@ export type Database = {
           month_id?: string
           movement_notes?: string | null
           position?: number
+          thumbnail_path?: string | null
           title?: string
           video_path?: string | null
           video_url?: string | null
@@ -2171,6 +2172,97 @@ export type Database = {
           {
             foreignKeyName: "site_content_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["user_role"]
+          status: string
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          full_name: string
+          id?: string
+          invited_by: string
+          role: Database["public"]["Enums"]["user_role"]
+          status?: string
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          full_name?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          status?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invitations_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invitations_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_invitations_invited_by_fkey"
+            columns: ["invited_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
@@ -2641,6 +2733,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_staff_invitation: { Args: { p_token: string }; Returns: Json }
       account_is_active: { Args: never; Returns: boolean }
       admin_dashboard_stats: { Args: never; Returns: Json }
       admin_find_identity_by_number: {
@@ -2695,6 +2788,19 @@ export type Database = {
         Returns: boolean
       }
       can_moderate_thread: { Args: { p_thread_id: string }; Returns: boolean }
+      cancel_staff_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
+      create_staff_invitation: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_role: Database["public"]["Enums"]["user_role"]
+          p_valid_days?: number
+        }
+        Returns: Json
+      }
       current_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -2711,6 +2817,7 @@ export type Database = {
         }
         Returns: string
       }
+      expire_staff_invitations: { Args: never; Returns: number }
       fn_audit: {
         Args: {
           p_action: string
@@ -2740,12 +2847,17 @@ export type Database = {
           tuition: number
         }[]
       }
+      fn_course_publish_problems: {
+        Args: { p_course_id: string }
+        Returns: string[]
+      }
       fn_exam_is_open: {
         Args: { p_exam: Database["public"]["Tables"]["exams"]["Row"] }
         Returns: boolean
       }
       fn_generate_certificate_number: { Args: never; Returns: string }
       fn_generate_receipt_number: { Args: never; Returns: string }
+      fn_hash_token: { Args: { p_token: string }; Returns: string }
       fn_month_access: {
         Args: { p_enrollment_id: string; p_month_number: number }
         Returns: Json
@@ -2784,6 +2896,10 @@ export type Database = {
         Args: { p_enrollment_id: string }
         Returns: Json
       }
+      get_course_publish_problems: {
+        Args: { p_course_id: string }
+        Returns: string[]
+      }
       get_my_course_map: { Args: { p_enrollment_id: string }; Returns: Json }
       get_public_settings: { Args: never; Returns: Json }
       grade_exam_attempt: {
@@ -2801,6 +2917,30 @@ export type Database = {
       issue_certificate: {
         Args: { p_completion_date?: string; p_enrollment_id: string }
         Returns: string
+      }
+      list_staff_invitations: {
+        Args: never
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["user_role"]
+          status: string
+          token_hash: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "staff_invitations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
       mask_identifier: { Args: { p: string }; Returns: string }
@@ -2953,6 +3093,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      staff_mfa_satisfied: { Args: never; Returns: boolean }
       staff_quiz_questions: {
         Args: { p_quiz_id: string }
         Returns: {
@@ -3251,3 +3392,4 @@ export const Constants = {
     },
   },
 } as const
+

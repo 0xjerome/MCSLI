@@ -125,6 +125,12 @@ async function signUp(who, fullName, nationality = 'ugandan', extraMeta = {}) {
     // members, so the account is created through the Auth admin API (same auth.users insert, same
     // profile trigger) and confirmation links are generated server-side. Nothing is e-mailed.
     const r = await service.auth.admin.createUser({ email: email(who), password: PASSWORD, email_confirm: false, user_metadata: data });
+    if (r.error && /already been registered|already exists/i.test(r.error.message)) {
+      // e.g. an invitation created the auth user before the (unconfigured) mailer refused the e-mail
+      const p = ok(await service.from('profiles').select('id').eq('email', email(who)).single(), `find ${who}`);
+      ok(await service.auth.admin.updateUserById(p.id, { password: PASSWORD, user_metadata: data }), `reset ${who}`);
+      return { client: c, id: p.id, email: email(who) };
+    }
     ok(r, `create ${who}`);
     return { client: c, id: r.data.user.id, email: email(who) };
   }
@@ -238,13 +244,11 @@ await step('logout revokes the refresh token', async () => {
   return 'global sign-out; all refresh tokens revoked';
 });
 
-begin('Staff accounts (bootstrap → role management)');
-await step('create [TEST] super admin, admin, trainer and a second student', async () => {
+begin('Staff accounts (bootstrap → invitations)');
+await step('create [TEST] super admin and a second student', async () => {
   ctx.super = await signUp('super', '[TEST] Super Admin');
-  ctx.admin = await signUp('admin', '[TEST] Admin');
-  ctx.trainer = await signUp('trainer', '[TEST] Trainer');
   ctx.other = await signUp('other', '[TEST] Student Other', 'international');
-  for (const u of [ctx.super, ctx.admin, ctx.trainer, ctx.other]) {
+  for (const u of [ctx.super, ctx.other]) {
     await confirmEmail(u);
     await signIn(u);
   }
@@ -254,7 +258,7 @@ await step('first SUPER_ADMIN via audited bootstrap (direct database session onl
   assert(viaApi.error, 'bootstrap must be refused through the API');
   if (!isLocal) {
     // hosted project: never touch real accounts; promote only this run's [TEST] account with the
-    // service role (demoted and suspended again in the cleanup below)
+    // service role (demoted, suspended and banned again in the cleanup below)
     ok(await service.from('profiles').update({ role: 'SUPER_ADMIN' }).eq('id', ctx.super.id), 'promote [TEST] super admin');
     return 'hosted: [TEST] account promoted with the service role';
   }
@@ -262,32 +266,104 @@ await step('first SUPER_ADMIN via audited bootstrap (direct database session onl
   if (existing === '0') {
     await sql(`select public.bootstrap_super_admin($1)`, [ctx.super.email]);
   } else {
-    // a super admin already exists in this database: promote through the existing path instead
     await sql(`update public.profiles set role = 'SUPER_ADMIN' where id = $1`, [ctx.super.id]);
   }
   const role = await sql(`select role from public.profiles where id = $1`, [ctx.super.id]);
   assert(role === 'SUPER_ADMIN', `role ${role}`);
   return existing === '0' ? 'bootstrap_super_admin() + audit row' : 'super admin already existed';
 });
-await step('super admin grants ADMIN; admin grants TRAINER; admin cannot grant ADMIN', async () => {
-  ok(await ctx.super.client.rpc('admin_set_user_role', { p_user_id: ctx.admin.id, p_role: 'ADMIN' }), 'grant admin');
-  ok(await ctx.admin.client.rpc('admin_set_user_role', { p_user_id: ctx.trainer.id, p_role: 'TRAINER' }), 'grant trainer');
+
+/**
+ * Invite through the invite-staff Edge Function, then accept like the invitee would.
+ * Local stack: the real invitation e-mail is read from Mailpit and its link followed.
+ * Hosted without SMTP: e-mail to a test address cannot be delivered, so the account is created with
+ * the Auth admin API and a fresh token is issued through create_staff_invitation (same acceptance path).
+ */
+async function inviteAndAccept(inviter, who, role, fullName) {
+  const r = await inviter.client.functions.invoke('invite-staff', { body: { email: email(who), full_name: fullName, role } });
+  if (r.error) throw new Error(`invite-staff: ${r.response?.status} ${await r.response?.text?.()}`);
+  const c = newClient();
+  const user = { client: c, email: email(who) };
+  let token;
+  if (cfg.mail) {
+    assert(r.data.email_sent === true, `invitation e-mail not sent: ${r.data.email_error}`);
+    const mail = await waitForMail(user.email, /invit/i);
+    const location = await followVerify(linkFrom(mail.HTML));
+    const u = new URL(location, SITE);
+    assert(u.origin + u.pathname === `${SITE}/accept-invite`, `invitation link returned to ${u.origin + u.pathname}`);
+    token = u.searchParams.get('token');
+    const hash = new URLSearchParams(u.hash.slice(1));
+    ok(await c.auth.setSession({ access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') }), 'invite session');
+    ok(await c.auth.updateUser({ password: PASSWORD }), 'invitee sets own password');
+    user.id = (await c.auth.getUser()).data.user.id;
+  } else {
+    const created = await signUp(who, fullName);
+    await confirmEmail(created);
+    Object.assign(user, created);
+    await signIn(user);
+    token = ok(await inviter.client.rpc('create_staff_invitation', { p_email: user.email, p_full_name: fullName, p_role: role }), 'token').token;
+  }
+  const acc = ok(await user.client.rpc('accept_staff_invitation', { p_token: token }), 'accept');
+  assert(acc.ok === true && acc.role === role, JSON.stringify(acc));
+  const reuse = ok(await user.client.rpc('accept_staff_invitation', { p_token: token }), 'reuse');
+  assert(reuse.ok === false && reuse.reason === 'used', 'token is single-use');
+  user.inviteEmailSent = r.data.email_sent;
+  return user;
+}
+
+await step('SUPER_ADMIN invites an ADMIN (e-mail link → own password → role active)', async () => {
+  ctx.admin = await inviteAndAccept(ctx.super, 'admin', 'ADMIN', '[TEST] Admin');
+  const p = ok(await ctx.admin.client.from('profiles').select('role').eq('id', ctx.admin.id).single(), 'profile');
+  assert(p.role === 'ADMIN', `role ${p.role}`);
+  return cfg.mail ? 'real invitation e-mail followed' : `hosted: e-mail_sent=${ctx.admin.inviteEmailSent} (SMTP not yet connected); acceptance via issued token`;
+});
+await step('ADMIN invites a TRAINER; ADMIN cannot invite ADMIN; trainers/students/anonymous cannot invite', async () => {
+  ctx.trainer = await inviteAndAccept(ctx.admin, 'trainer', 'TRAINER', '[TEST] Trainer');
+  const tryInvite = (u, role) => u.client.functions.invoke('invite-staff', { body: { email: email(`x-${role.toLowerCase()}`), full_name: '[TEST] X', role } });
+  const a = await tryInvite(ctx.admin, 'ADMIN');
+  assert(a.error && a.response?.status === 403, `admin→ADMIN status ${a.response?.status}`);
+  const t = await tryInvite(ctx.trainer, 'TRAINER');
+  assert(t.error && t.response?.status === 403, `trainer status ${t.response?.status}`);
+  const st = await tryInvite(ctx.other, 'TRAINER');
+  assert(st.error && st.response?.status === 403, `student status ${st.response?.status}`);
+  const res = await fetch(`${cfg.url}/functions/v1/invite-staff`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: cfg.anon }, body: JSON.stringify({ email: 'x@y.z', full_name: 'X', role: 'ADMIN' }) });
+  assert(res.status === 401, `anonymous status ${res.status}`);
   await denied(ctx.admin.client.rpc('admin_set_user_role', { p_user_id: ctx.other.id, p_role: 'ADMIN' }), /super admin/);
+  await denied(ctx.admin.client.rpc('admin_set_user_role', { p_user_id: ctx.super.id, p_role: 'STUDENT' }), /super admin/);
+  await denied(ctx.admin.client.rpc('admin_set_account_status', { p_user_id: ctx.super.id, p_status: 'suspended' }), /super admin/);
   await denied(ctx.student.client.rpc('admin_set_user_role', { p_user_id: ctx.student.id, p_role: 'ADMIN' }));
-  const audit = ok(await ctx.admin.client.from('audit_logs').select('action').eq('target_user_id', ctx.trainer.id).eq('action', 'profile.role_changed'), 'audit');
-  assert(audit.length === 1, 'role change audited');
+  const upd = await ctx.admin.client.from('profiles').update({ role: 'SUPER_ADMIN' }).eq('id', ctx.admin.id);
+  assert(upd.error, 'ADMIN cannot promote self');
+  const audit = ok(await ctx.super.client.from('audit_logs').select('action').in('action', ['staff_invitation.created', 'staff_invitation.accepted', 'staff.admin_created', 'staff.trainer_created']), 'audit');
+  for (const x of ['staff_invitation.created', 'staff_invitation.accepted', 'staff.admin_created', 'staff.trainer_created']) assert(audit.some((r) => r.action === x), `audit ${x}`);
+  const leaked = ok(await ctx.super.client.from('audit_logs').select('metadata').like('action', 'staff_invitation.%'), 'audit metadata');
+  assert(!/[0-9a-f]{64}/.test(JSON.stringify(leaked)), 'no invitation token in audit metadata');
+});
+await step('invitation misuse: wrong account, cancelled and expired links are refused', async () => {
+  const inv = ok(await ctx.admin.client.rpc('create_staff_invitation', { p_email: email('misuse'), p_full_name: '[TEST] Misuse', p_role: 'TRAINER' }), 'invite');
+  const wrong = ok(await ctx.other.client.rpc('accept_staff_invitation', { p_token: inv.token }), 'wrong');
+  assert(wrong.ok === false && wrong.reason === 'wrong_account', JSON.stringify(wrong));
+  ok(await ctx.admin.client.rpc('cancel_staff_invitation', { p_invitation_id: inv.invitation_id }), 'cancel');
+  const list = ok(await ctx.admin.client.rpc('list_staff_invitations'), 'list');
+  assert(list.find((i) => i.id === inv.invitation_id)?.status === 'cancelled', 'cancelled');
+  const forged = ok(await ctx.other.client.rpc('accept_staff_invitation', { p_token: 'f'.repeat(64) }), 'forged');
+  assert(forged.ok === false && forged.reason === 'invalid', 'forged token refused');
+  const staffRead = await ctx.other.client.from('staff_invitations').select('id');
+  assert(staffRead.error || staffRead.data.length === 0, 'students cannot list invitations');
 });
 
 begin('Course setup ([TEST] course, admin tools)');
 await step('admin creates a 2-month [TEST] course with pricing, lessons, quiz and final exam', async () => {
   const a = ctx.admin.client;
-  const course = ok(await a.from('courses').insert({ slug: `test-e2e-${RUN}`, title: `[TEST] E2E Course ${RUN}`, duration_months: 2, tuition_national: 350000, tuition_international: 400000, registration_fee: 20000, installments_enabled: true, installment_count: 2, installment_due_before_month: { 2: 2 }, requires_final_exam: true, is_published: true }).select().single(), 'course');
+  const course = ok(await a.from('courses').insert({ slug: `test-e2e-${RUN}`, title: `[TEST] E2E Course ${RUN}`, duration_months: 2, tuition_national: 350000, tuition_international: 400000, registration_fee: 20000, installments_enabled: true, installment_count: 2, installment_due_before_month: { 2: 2 }, requires_final_exam: true, is_published: false }).select().single(), 'course');
+  const early = await a.from('courses').update({ is_published: true }).eq('id', course.id);
+  assert(early.error && /cannot be published yet/.test(early.error.message), 'an empty draft cannot be published');
   ctx.course = course;
   const months = ok(await a.from('course_months').insert([1, 2].map((n) => ({ course_id: course.id, month_number: n, title: `[TEST] Month ${n}` }))).select(), 'months');
   ctx.m1 = months.find((m) => m.month_number === 1);
   ctx.m2 = months.find((m) => m.month_number === 2);
   const mods = ok(await a.from('modules').insert([ctx.m1, ctx.m2].map((m) => ({ month_id: m.id, title: `[TEST] Module M${m.month_number}` }))).select(), 'modules');
-  const lessons = ok(await a.from('lessons').insert(mods.map((mo, i) => ({ module_id: mo.id, title: `[TEST] Lesson ${i + 1}`, video_url: '/demo/demo-lesson.mp4' }))).select('id, module_id'), 'lessons');
+  const lessons = ok(await a.from('lessons').insert(mods.map((mo, i) => ({ module_id: mo.id, title: `[TEST] Lesson ${i + 1}`, video_url: 'https://mcsli-test.invalid/test-lesson.mp4' }))).select('id, module_id'), 'lessons');
   ctx.l1 = lessons.find((l) => l.module_id === mods.find((mo) => mo.month_id === ctx.m1.id).id).id;
   ctx.l2 = lessons.find((l) => l.module_id === mods.find((mo) => mo.month_id === ctx.m2.id).id).id;
   ctx.quiz = ok(await a.from('quizzes').insert({ month_id: ctx.m1.id, title: '[TEST] Month 1 quiz', passing_score: 70 }).select().single(), 'quiz');
@@ -301,8 +377,13 @@ await step('admin creates a 2-month [TEST] course with pricing, lessons, quiz an
     { exam_id: ctx.exam.id, position: 2, question_type: 'practical', prompt: '[TEST] Practical', options: [], correct_answer: null, points: 2, requires_manual_grading: true },
   ]), 'exam questions');
   ok(await a.from('trainer_assignments').insert({ trainer_id: ctx.trainer.id, course_id: course.id }), 'assign trainer');
+  const problems = ok(await a.rpc('get_course_publish_problems', { p_course_id: course.id }), 'checklist');
+  assert(problems.length === 0, `publish checklist: ${problems.join('; ')}`);
+  ok(await a.from('courses').update({ is_published: true }).eq('id', course.id), 'publish');
   // [TEST] payment method, enabled only for this run
-  ctx.method = ok(await a.from('payment_methods').insert({ method_type: 'mtn', display_name: `[TEST] MTN ${RUN}`, merchant_code: 'TEST-000', is_enabled: true, position: 99 }).select().single(), 'test payment method');
+  const incomplete = await a.from('payment_methods').insert({ method_type: 'mtn', display_name: `[TEST] MTN incomplete ${RUN}`, is_enabled: true, position: 98 });
+  assert(incomplete.error && /merchant code/.test(incomplete.error.message), 'a method without details cannot be enabled');
+  ctx.method = ok(await a.from('payment_methods').insert({ method_type: 'mtn', display_name: `[TEST] MTN ${RUN}`, merchant_code: 'TEST-000', account_name: '[TEST] MCSLI', is_enabled: true, position: 99 }).select().single(), 'test payment method');
   return `course ${course.slug}`;
 });
 await step('a trainer and a student cannot change courses, pricing or platform settings', async () => {

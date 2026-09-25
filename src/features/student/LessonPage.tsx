@@ -28,6 +28,7 @@ export default function LessonPage() {
   const map = useCourseMap(enrollment?.id);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [captionsUrl, setCaptionsUrl] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<'about' | 'transcript' | 'resources'>('about');
   const [curriculumOpen, setCurriculumOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -37,11 +38,16 @@ export default function LessonPage() {
     const l = lesson.data;
     if (!l) return;
     let cancelled = false;
-    Promise.all([resolveMediaUrl(l.video_path, l.video_url), resolveMediaUrl(l.captions_path, l.captions_path?.startsWith('/') ? l.captions_path : null)])
-      .then(([v, c]) => {
+    Promise.all([
+      resolveMediaUrl(l.video_path, l.video_url),
+      resolveMediaUrl(l.captions_path, l.captions_path?.startsWith('/') ? l.captions_path : null),
+      l.thumbnail_path ? resolveMediaUrl(l.thumbnail_path, null).catch(() => null) : Promise.resolve(null),
+    ])
+      .then(([v, c, p]) => {
         if (!cancelled) {
           setVideoUrl(v);
           setCaptionsUrl(c);
+          setPosterUrl(p);
         }
       })
       .catch(() => {
@@ -144,7 +150,7 @@ export default function LessonPage() {
         <Breadcrumb items={[{ label: 'My course', to: `/app/course/${enrollment.course_id}` }, { label: `Month ${month.month_number}`, to: `/app/course/${enrollment.course_id}/month/${month.id}` }, { label: l.title }]} className="mb-3" />
         <h1 className="text-display-sm">{l.title}</h1>
         <div className="mt-4">
-          <VideoPlayer src={videoUrl} captionsSrc={captionsUrl} title={l.title} startAt={myProgress?.last_position_seconds ?? 0} onProgress={onProgress} />
+          <VideoPlayer src={videoUrl} captionsSrc={captionsUrl} poster={posterUrl} title={l.title} startAt={myProgress?.last_position_seconds ?? 0} onProgress={onProgress} />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">

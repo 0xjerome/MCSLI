@@ -50,7 +50,7 @@ describe('RegisterPage (multi-step registration)', () => {
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     expect(await screen.findByText(/check your e-mail/i)).toBeInTheDocument();
-    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ email: 'aisha@example.test', fullName: 'Aisha Nakato', nationality: 'international', country: 'Kenya', password: 'StrongPass123' }));
+    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ email: 'aisha@example.test', fullName: 'Aisha Nakato', nationality: 'international', country: 'Kenya', password: 'StrongPass123' }), undefined);
   });
 
   it('rejects mismatched passwords', async () => {

@@ -1,3 +1,4 @@
+import { useCaptcha } from '@/features/auth/Captcha';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { z } from 'zod';
@@ -37,6 +38,7 @@ export default function RegisterPage() {
   const [serverError, setServerError] = useState('');
   const [done, setDone] = useState<null | { needsEmailConfirmation: boolean }>(null);
   usePageMeta({ title: 'Create your account', description: 'Register for the MCSLI online Ugandan Sign Language course.', path: '/register' });
+  const captcha = useCaptcha();
 
   if (!configured) return <NotConfigured />;
 
@@ -70,9 +72,10 @@ export default function RegisterPage() {
     setBusy(true);
     setServerError('');
     try {
-      const res = await signUp({ email: form.email, password: form.password, fullName: form.fullName, phone: form.phone, nationality: form.nationality!, country: form.country, city: form.city });
+      const res = await signUp({ email: form.email, password: form.password, fullName: form.fullName, phone: form.phone, nationality: form.nationality!, country: form.country, city: form.city }, captcha.token);
       setDone(res);
     } catch (err) {
+      captcha.reset();
       setServerError(friendlyError(err));
     } finally {
       setBusy(false);
@@ -175,9 +178,12 @@ export default function RegisterPage() {
               Continue
             </Button>
           ) : (
-            <Button type="submit" loading={busy}>
-              Create account
-            </Button>
+            <div className="flex flex-col items-end gap-2">
+              {captcha.widget}
+              <Button type="submit" loading={busy} disabled={!captcha.ready}>
+                Create account
+              </Button>
+            </div>
           )}
         </div>
       </form>

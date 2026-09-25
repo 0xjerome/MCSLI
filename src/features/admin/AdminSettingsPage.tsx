@@ -34,7 +34,7 @@ export default function AdminSettingsPage() {
         <PlatformSettingsEditor keys={['certificate']} />
       </TabPanel>
       <TabPanel id="platform" value={tab}>
-        <PlatformSettingsEditor keys={['registration_open', 'support_email', 'support_phone', 'support_whatsapp', 'identity_retention_days']} />
+        <PlatformSettingsEditor keys={['registration_open', 'require_staff_mfa', 'support_email', 'support_phone', 'support_whatsapp', 'identity_retention_days']} />
       </TabPanel>
     </>
   );
@@ -118,7 +118,7 @@ function PaymentMethodsEditor() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input name="merchant_code" label={`${m.method_type === 'mtn' ? 'MTN MoMo Pay' : 'Airtel Pay'} merchant code`} defaultValue={m.merchant_code ?? ''} />
-                  <Input name="account_name" label="Registered merchant name" optionalLabel defaultValue={m.account_name ?? ''} />
+                  <Input name="account_name" label="Registered merchant name" defaultValue={m.account_name ?? ''} hint="Required before the method can be enabled." />
                   <input type="hidden" name="bank_name" value="" />
                   <input type="hidden" name="account_number" value="" />
                   <input type="hidden" name="branch" value="" />
@@ -127,7 +127,7 @@ function PaymentMethodsEditor() {
               )}
               <Textarea name="instructions" label="Instructions shown to students" optionalLabel rows={2} defaultValue={m.instructions ?? ''} />
               <div className="flex items-center justify-between">
-                <Checkbox name="is_enabled" label="Enabled – visible to students" defaultChecked={m.is_enabled} />
+                <Checkbox name="is_enabled" label="Enabled – visible to students (requires the details above)" defaultChecked={m.is_enabled} />
                 <Button type="submit" loading={busyId === m.id}>
                   Save
                 </Button>
@@ -141,7 +141,8 @@ function PaymentMethodsEditor() {
 }
 
 const labels: Record<string, { label: string; hint?: string; type: 'boolean' | 'text' | 'number' | 'json' }> = {
-  registration_open: { label: 'Registration open', hint: 'When off, new accounts cannot enroll.', type: 'boolean' },
+  registration_open: { label: 'Registration open', hint: 'When off, new accounts cannot enroll. Super admin only.', type: 'boolean' },
+  require_staff_mfa: { label: 'Require two-factor authentication for staff', hint: 'Trainers and administrators must verify an authenticator code to use staff tools. Set up two-factor authentication on your own profile first. Super admin only.', type: 'boolean' },
   support_email: { label: 'Support e-mail', type: 'text' },
   support_phone: { label: 'Support phone', type: 'text' },
   support_whatsapp: { label: 'Support WhatsApp', type: 'text' },

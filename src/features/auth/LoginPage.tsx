@@ -1,3 +1,4 @@
+import { useCaptcha } from '@/features/auth/Captcha';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageMeta } from '@/lib/seo';
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [resent, setResent] = useState(false);
   usePageMeta({ title: 'Log in', noIndex: true });
+  const captcha = useCaptcha();
 
   if (!configured) return <NotConfigured />;
   const from = (location.state as { from?: string } | null)?.from;
@@ -34,11 +36,12 @@ export default function LoginPage() {
     }
     setBusy(true);
     try {
-      await signIn(email, password);
+      await signIn(email, password, captcha.token);
       // AuthProvider will load the profile; RedirectIfAuthed handles role routing, but
       // honour a remembered destination first.
       navigate(from ?? '/app', { replace: true });
     } catch (err) {
+      captcha.reset();
       const msg = friendlyError(err);
       setError(msg);
       if (/confirm your e-mail/i.test(msg)) setUnconfirmed(true);
@@ -74,7 +77,7 @@ export default function LoginPage() {
                   size="sm"
                   onClick={async () => {
                     try {
-                      await resendVerification(email);
+                      await resendVerification(email, captcha.token);
                       setResent(true);
                     } catch (err) {
                       setError(friendlyError(err));
@@ -91,7 +94,8 @@ export default function LoginPage() {
             {error}
           </Alert>
         )}
-        <Button type="submit" size="lg" fullWidth loading={busy}>
+        {captcha.widget}
+        <Button type="submit" size="lg" fullWidth loading={busy} disabled={!captcha.ready}>
           Log in
         </Button>
       </form>

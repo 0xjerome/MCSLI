@@ -34,6 +34,7 @@ create table if not exists auth.users (
   id uuid primary key,
   email text unique,
   raw_user_meta_data jsonb default '{}'::jsonb,
+  email_confirmed_at timestamptz default now(),   -- tests create confirmed users unless they override it
   created_at timestamptz default now()
 );
 

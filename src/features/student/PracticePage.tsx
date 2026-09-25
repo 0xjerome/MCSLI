@@ -70,6 +70,7 @@ export default function PracticePage() {
 
 function PracticeStage({ item }: { item: PracticeItem }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [poster, setPoster] = useState<string | null>(null);
   const [mirror, setMirror] = useState(false);
   const [slow, setSlow] = useState(false);
   const [camera, setCamera] = useState<'off' | 'starting' | 'on' | 'denied'>('off');
@@ -80,6 +81,8 @@ function PracticeStage({ item }: { item: PracticeItem }) {
     let cancelled = false;
     setSrc(null);
     resolveMediaUrl(item.video_path, item.video_url).then((u) => !cancelled && setSrc(u)).catch(() => !cancelled && setSrc(null));
+    setPoster(null);
+    if (item.thumbnail_path) resolveMediaUrl(item.thumbnail_path, null).then((u) => !cancelled && setPoster(u)).catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -129,7 +132,7 @@ function PracticeStage({ item }: { item: PracticeItem }) {
       <div className={cn('mt-4 grid gap-4', camera === 'on' && 'md:grid-cols-2')}>
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-500">Reference sign</p>
-          <VideoPlayer key={`${item.id}-${slow}`} src={src} title={`Reference: ${item.title}`} mirror={mirror} loop compact defaultRate={slow ? 0.5 : 1} />
+          <VideoPlayer key={`${item.id}-${slow}`} src={src} poster={poster} title={`Reference: ${item.title}`} mirror={mirror} loop compact defaultRate={slow ? 0.5 : 1} />
         </div>
         {camera === 'on' && (
           <div>

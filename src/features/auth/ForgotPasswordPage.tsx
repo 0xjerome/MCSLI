@@ -1,3 +1,4 @@
+import { useCaptcha } from '@/features/auth/Captcha';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageMeta } from '@/lib/seo';
@@ -14,6 +15,7 @@ export default function ForgotPasswordPage() {
   const [state, setState] = useState<'idle' | 'busy' | 'sent'>('idle');
   const [error, setError] = useState('');
   usePageMeta({ title: 'Reset your password', noIndex: true });
+  const captcha = useCaptcha();
   if (!configured) return <NotConfigured />;
 
   const onSubmit = async (e: FormEvent) => {
@@ -22,9 +24,10 @@ export default function ForgotPasswordPage() {
     setError('');
     setState('busy');
     try {
-      await requestPasswordReset(email);
+      await requestPasswordReset(email, captcha.token);
       setState('sent');
     } catch (err) {
+      captcha.reset();
       setError(friendlyError(err));
       setState('idle');
     }
@@ -41,7 +44,8 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={onSubmit} noValidate className="mt-8 space-y-5">
           <Input label="E-mail address" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} error={error} />
-          <Button type="submit" size="lg" fullWidth loading={state === 'busy'}>
+          {captcha.widget}
+          <Button type="submit" size="lg" fullWidth loading={state === 'busy'} disabled={!captcha.ready}>
             Send reset link
           </Button>
         </form>

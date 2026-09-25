@@ -127,6 +127,7 @@ export interface Module {
 }
 
 export interface Lesson {
+  thumbnail_path: string | null;
   id: string;
   module_id: string;
   position: number;
@@ -152,6 +153,7 @@ export interface LessonResource {
 }
 
 export interface PracticeItem {
+  thumbnail_path: string | null;
   id: string;
   month_id: string;
   position: number;

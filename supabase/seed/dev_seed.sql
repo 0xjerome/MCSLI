@@ -89,7 +89,7 @@ on conflict (id) do nothing;
 -- [DEMO] payment method details so the payment form can be exercised. Replace in Admin → Settings.
 update public.payment_methods set is_enabled = true, display_name = '[DEMO] ' || display_name,
   bank_name = case when method_type = 'bank' then 'Demo Bank (replace)' end,
-  account_name = case when method_type = 'bank' then 'MCSLI (demo)' end,
+  account_name = 'MCSLI (demo)',
   account_number = case when method_type = 'bank' then '0000000000' end,
   merchant_code = case when method_type in ('mtn', 'airtel') then '000000' end
 where display_name not like '[DEMO]%';

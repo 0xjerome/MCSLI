@@ -4,6 +4,7 @@ import { hasAtLeast, homeRouteFor } from '@/domain/roles';
 import type { UserRole } from '@/domain/types';
 import { PageLoader, PermissionDenied, Alert } from '@/components/ui/Misc';
 import { ButtonLink } from '@/components/ui/Button';
+import { StaffMfaGate } from '@/features/auth/Mfa';
 
 /**
  * Route guard. Redirects anonymous users to /login (remembering where they were going) and
@@ -33,6 +34,15 @@ export function RequireAuth({ minRole, exactRoles }: { minRole?: UserRole; exact
       <div className="container-x py-16">
         <PermissionDenied description={`This area is for ${exactRoles?.join(' / ') ?? minRole} accounts. Your home is ${homeRouteFor(role)}.`} />
       </div>
+    );
+  }
+  // Trainer and admin areas: two-factor challenge / enforced enrolment (the database enforces it too).
+  const staffArea = (exactRoles ?? []).includes('TRAINER') || minRole === 'ADMIN' || minRole === 'SUPER_ADMIN' || minRole === 'TRAINER';
+  if (staffArea) {
+    return (
+      <StaffMfaGate>
+        <Outlet />
+      </StaffMfaGate>
     );
   }
   return <Outlet />;

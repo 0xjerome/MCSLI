@@ -79,6 +79,7 @@ export const router = createBrowserRouter([
           },
           { path: '/reset-password', element: lazyPage(() => import('@/features/auth/ResetPasswordPage')) },
           { path: '/verify-email', element: lazyPage(() => import('@/features/auth/VerifyEmailPage')) },
+          { path: '/accept-invite', element: lazyPage(() => import('@/features/auth/AcceptInvitePage')) },
         ],
       },
       // ---------------- Student app ----------------
@@ -160,6 +161,7 @@ export const router = createBrowserRouter([
               { path: '/admin/students', element: lazyPage(() => import('@/features/admin/AdminStudentsPage')) },
               { path: '/admin/students/:userId', element: lazyPage(() => import('@/features/admin/AdminStudentDetailPage')) },
               { path: '/admin/enrollments/:enrollmentId', element: lazyPage(() => import('@/features/staff/EnrollmentDetailPage')) },
+              { path: '/admin/staff', element: lazyPage(() => import('@/features/admin/AdminStaffPage')) },
               { path: '/admin/trainers', element: lazyPage(() => import('@/features/admin/AdminTrainersPage')) },
               { path: '/admin/courses', element: lazyPage(() => import('@/features/admin/AdminCoursesPage')) },
               { path: '/admin/courses/:courseId', element: lazyPage(() => import('@/features/admin/AdminCourseEditorPage')) },

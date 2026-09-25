@@ -143,10 +143,11 @@ describe('payments', () => {
 
   it('"Registration open = off" blocks new enrollments server-side; existing ones continue', async () => {
     const late = await createUser(client, 'late@example.test', { nationality: 'ugandan' });
-    await asUser(client, admin, (q) => q(`select public.set_platform_setting('registration_open', 'false'::jsonb)`));
+    expect(await expectDenied(rows(admin, `select public.set_platform_setting('registration_open', 'false'::jsonb)`))).toMatch(/only a super admin/);
+    await asUser(client, superAdmin, (q) => q(`select public.set_platform_setting('registration_open', 'false'::jsonb)`));
     expect(await expectDenied(rows(late, `select public.enroll_in_course($1, 'full')`, [DEMO.course]))).toMatch(/Enrollment is currently closed/);
     expect(await rows(alice, `select id from public.enrollments where id = $1`, [aliceEnrollment])).toHaveLength(1);
-    await asUser(client, admin, (q) => q(`select public.set_platform_setting('registration_open', 'true'::jsonb)`));
+    await asUser(client, superAdmin, (q) => q(`select public.set_platform_setting('registration_open', 'true'::jsonb)`));
     expect(await rows(late, `select public.enroll_in_course($1, 'full') as id`, [DEMO.course])).toHaveLength(1);
   });
 
@@ -339,5 +340,114 @@ describe('public endpoints', () => {
       });
       expect([t, r]).toEqual([t, 0]);
     }
+  });
+});
+
+describe('staff invitations', () => {
+  const invite = (who: TestUser, email: string, role: 'ADMIN' | 'TRAINER') =>
+    asUser(client, who, async (q) => (await q(`select public.create_staff_invitation($1, $2, $3) as r`, [email, '[TEST] Invitee', role])).rows[0].r as { invitation_id: string; token: string });
+
+  it('SUPER_ADMIN invites ADMIN; ADMIN invites TRAINER but never ADMIN; students and trainers cannot invite', async () => {
+    expect(await expectDenied(invite(admin, 'x.admin@example.test', 'ADMIN'))).toMatch(/only a super admin/);
+    expect(await expectDenied(invite(trainer, 'x.trainer@example.test', 'TRAINER'))).toMatch(/not authorised/);
+    expect(await expectDenied(invite(alice, 'x.trainer@example.test', 'TRAINER'))).toMatch(/not authorised/);
+    expect(await expectDenied(asUser(client, superAdmin, (q) => q(`select public.create_staff_invitation('x@example.test', 'X', 'SUPER_ADMIN')`)))).toMatch(/ADMIN or TRAINER/);
+    const a = await invite(superAdmin, 'new.admin@example.test', 'ADMIN');
+    expect(a.token).toMatch(/^[0-9a-f]{64}$/);
+    const t = await invite(admin, 'new.trainer@example.test', 'TRAINER');
+    // only a hash is stored and the token column is not readable through the API
+    const stored = (await client.query(`select token_hash from public.staff_invitations where id = $1`, [a.invitation_id])).rows[0].token_hash;
+    expect(stored).not.toBe(a.token);
+    expect(await expectDenied(rows(superAdmin, `select token_hash from public.staff_invitations`))).toMatch(/permission denied/);
+    // ADMINs see trainer invitations only; students see none
+    expect((await rows(admin, `select id from public.staff_invitations`)).map((r) => r.id)).toEqual([t.invitation_id]);
+    expect(await rows(alice, `select id from public.staff_invitations`)).toHaveLength(0);
+    const audit = (await client.query(`select metadata from public.audit_logs where action = 'staff_invitation.created'`)).rows;
+    expect(audit).toHaveLength(2);
+    expect(JSON.stringify(audit)).not.toContain(a.token);
+  });
+
+  it('acceptance requires the invited, confirmed address; tokens are single-use; role changes are audited', async () => {
+    const t = await invite(admin, 'invited.trainer@example.test', 'TRAINER');
+    const wrong = await createUser(client, 'someone.else@example.test');
+    const acc = async (u: TestUser, tok: string) => (await rows(u, `select public.accept_staff_invitation($1) as r`, [tok]))[0].r as { ok: boolean; reason?: string; role?: string };
+    expect(await acc(wrong, t.token)).toMatchObject({ ok: false, reason: 'wrong_account' });
+    expect((await client.query(`select count(*)::int as n from public.audit_logs where action = 'staff_invitation.rejected_wrong_account'`)).rows[0].n).toBe(1);
+    expect(await expectDenied(rows(null, `select public.accept_staff_invitation($1)`, [t.token]))).toMatch(/permission denied|sign in/);
+    const invitee = await createUser(client, 'invited.trainer@example.test');
+    await client.query(`update auth.users set email_confirmed_at = null where id = $1`, [invitee.id]);
+    expect(await acc(invitee, t.token)).toMatchObject({ ok: false, reason: 'unconfirmed' });
+    await client.query(`update auth.users set email_confirmed_at = now() where id = $1`, [invitee.id]);
+    expect(await acc(invitee, '0'.repeat(64))).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(await acc(invitee, 'not-a-token')).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(await acc(invitee, t.token)).toEqual({ ok: true, role: 'TRAINER' });
+    expect((await client.query(`select role from public.profiles where id = $1`, [invitee.id])).rows[0].role).toBe('TRAINER');
+    expect(await acc(invitee, t.token)).toMatchObject({ ok: false, reason: 'used' });
+    const actions = (await client.query(`select action from public.audit_logs where target_user_id = $1 order by id`, [invitee.id])).rows.map((r) => r.action);
+    expect(actions).toEqual(expect.arrayContaining(['staff_invitation.accepted', 'staff.trainer_created']));
+    // the accepted role cannot be escalated by the invitee afterwards
+    expect(await expectDenied(rows(invitee, `update public.profiles set role = 'ADMIN' where id = $1`, [invitee.id]))).toMatch(/not authorised/);
+  });
+
+  it('expired and cancelled invitations cannot be used', async () => {
+    const e = await invite(superAdmin, 'late.admin@example.test', 'ADMIN');
+    await client.query(`update public.staff_invitations set expires_at = now() - interval '1 minute' where id = $1`, [e.invitation_id]);
+    const late = await createUser(client, 'late.admin@example.test');
+    expect((await rows(late, `select public.accept_staff_invitation($1) as r`, [e.token]))[0].r).toMatchObject({ ok: false, reason: 'expired' });
+    expect((await client.query(`select count(*)::int as n from public.audit_logs where action = 'staff_invitation.expired' and entity_id = $1`, [e.invitation_id])).rows[0].n).toBe(1);
+    const c = await invite(admin, 'cancel.me@example.test', 'TRAINER');
+    await asUser(client, admin, (q) => q(`select public.cancel_staff_invitation($1)`, [c.invitation_id]));
+    const cm = await createUser(client, 'cancel.me@example.test');
+    expect((await rows(cm, `select public.accept_staff_invitation($1) as r`, [c.token]))[0].r).toMatchObject({ ok: false, reason: 'cancelled' });
+    expect((await client.query(`select role from public.profiles where id = $1`, [cm.id])).rows[0].role).toBe('STUDENT');
+    // ADMIN cannot cancel an ADMIN invitation
+    const a2 = await invite(superAdmin, 'another.admin@example.test', 'ADMIN');
+    expect(await expectDenied(rows(admin, `select public.cancel_staff_invitation($1)`, [a2.invitation_id]))).toMatch(/only a super admin/);
+    // direct writes are impossible
+    expect(await expectDenied(rows(admin, `update public.staff_invitations set status = 'pending' where id = $1`, [c.invitation_id]))).toMatch(/permission denied/);
+  });
+
+  it('staff suspension/reactivation is audited as staff actions', async () => {
+    const t = await createUser(client, 'susp.trainer@example.test', {}, 'TRAINER');
+    await asUser(client, admin, (q) => q(`select public.admin_set_account_status($1, 'suspended', '[TEST]')`, [t.id]));
+    await asUser(client, admin, (q) => q(`select public.admin_set_account_status($1, 'active', '[TEST]')`, [t.id]));
+    const actions = (await client.query(`select action from public.audit_logs where target_user_id = $1 order by id`, [t.id])).rows.map((r) => r.action);
+    expect(actions).toEqual(['staff.suspended', 'staff.reactivated']);
+  });
+});
+
+describe('staff MFA enforcement, payment methods, curriculum safety', () => {
+  it('require_staff_mfa: only a super admin with an aal2 session can enable it; then staff need aal2', async () => {
+    expect(await expectDenied(rows(admin, `select public.set_platform_setting('require_staff_mfa', 'true'::jsonb)`))).toMatch(/only a super admin/);
+    expect(await expectDenied(rows(superAdmin, `select public.set_platform_setting('require_staff_mfa', 'true'::jsonb)`))).toMatch(/two-factor/);
+    const aal2 = (u: TestUser, sql: string) => asUser(client, u, async (q) => {
+      await q(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: u.id, role: 'authenticated', email: u.email, aal: 'aal2' })]);
+      return (await q(sql)).rows;
+    });
+    await aal2(superAdmin, `select public.set_platform_setting('require_staff_mfa', 'true'::jsonb)`);
+    expect(await rows(admin, `select public.is_admin() as a`)).toEqual([{ a: false }]);        // aal1 session
+    expect(await aal2(admin, `select public.is_admin() as a`)).toEqual([{ a: true }]);          // after TOTP
+    expect(await rows(alice, `select id from public.enrollments`)).toHaveLength(1);              // students unaffected
+    await aal2(superAdmin, `select public.set_platform_setting('require_staff_mfa', 'false'::jsonb)`);
+    expect(await rows(admin, `select public.is_admin() as a`)).toEqual([{ a: true }]);
+  });
+
+  it('payment methods cannot be enabled without their details', async () => {
+    const bank = (await client.query(`select id from public.payment_methods where method_type = 'bank'`)).rows[0].id;
+    await asUser(client, admin, (q) => q(`update public.payment_methods set is_enabled = false, account_number = null where id = $1`, [bank]));
+    expect(await expectDenied(rows(admin, `update public.payment_methods set is_enabled = true where id = $1`, [bank]))).toMatch(/account number/);
+    expect(await asUser(client, trainer, async (q) => (await q(`update public.payment_methods set is_enabled = true where id = $1`, [bank])).rowCount)).toBe(0);
+  });
+
+  it('a course cannot be published incomplete, and content with student history cannot be deleted', async () => {
+    const course = await asUser(client, admin, async (q) => (await q(`insert into public.courses (slug, title, duration_months, tuition_national, tuition_international) values ('test-draft', '[TEST] Draft', 1, 350000, 400000) returning id`)).rows[0].id);
+    expect(await expectDenied(rows(admin, `update public.courses set is_published = true where id = $1`, [course]))).toMatch(/cannot be published yet.*published month/);
+    expect(await expectDenied(rows(admin, `insert into public.courses (slug, title, duration_months, tuition_national, tuition_international, is_published) values ('test-pub', '[TEST] Pub', 1, 1, 1, true)`))).toMatch(/draft/);
+    const problems = (await rows(admin, `select public.get_course_publish_problems($1) as p`, [course]))[0].p;
+    expect(problems.length).toBeGreaterThan(0);
+    // lesson 11 of the demo course has student progress (alice)
+    await asUser(client, alice, (q) => q(`select public.save_lesson_progress($1, 5, false)`, [DEMO.lesson11]));
+    expect(await expectDenied(rows(admin, `delete from public.lessons where id = $1`, [DEMO.lesson11]))).toMatch(/student history/);
+    expect(await expectDenied(rows(admin, `delete from public.course_months where id = $1`, [DEMO.month1]))).toMatch(/student history/);
   });
 });

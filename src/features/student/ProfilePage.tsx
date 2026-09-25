@@ -1,3 +1,4 @@
+import { MfaSettings } from '@/features/auth/Mfa';
 import { useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Upload, Trash2, FileText, Eye } from 'lucide-react';
@@ -63,7 +64,8 @@ export default function ProfilePage() {
         {role === 'STUDENT' ? <IdentitySection /> : (
           <Card>
             <CardHeader title="Role" />
-            <p className="text-sm text-ink-700">You are signed in as <strong>{role}</strong>.</p>
+            <p className="mb-6 text-sm text-ink-700">You are signed in as <strong>{role}</strong>.</p>
+            <MfaSettings />
           </Card>
         )}
       </div>

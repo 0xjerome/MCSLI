@@ -446,3 +446,78 @@ export async function listReports(): Promise<(DiscussionReport & { reporter?: Pu
 export async function dismissReport(id: string): Promise<void> {
   must(await sb().from('discussion_reports').update({ status: 'dismissed' }).eq('id', id));
 }
+
+// ---------------------------------------------------------------------------
+// Staff invitations (ADMIN / TRAINER)
+// ---------------------------------------------------------------------------
+export interface StaffInvitation {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'ADMIN' | 'TRAINER';
+  status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+  invited_by: string;
+  expires_at: string;
+  accepted_by: string | null;
+  accepted_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+}
+export interface InviteResult {
+  invitation_id: string;
+  email_sent: boolean;
+  email_error?: string;
+}
+/**
+ * Creates the invitation and sends the e-mail through the invite-staff Edge Function. The
+ * single-use token never reaches the browser: it is generated in the database and put only into
+ * the e-mailed link.
+ */
+export async function inviteStaff(input: { email: string; fullName: string; role: 'ADMIN' | 'TRAINER' }): Promise<InviteResult> {
+  const res = await sb().functions.invoke('invite-staff', { body: { email: input.email.trim(), full_name: input.fullName.trim(), role: input.role } });
+  if (res.error) {
+    // FunctionsHttpError: surface the database's human-readable refusal when available
+    const ctx = (res.error as { context?: Response }).context;
+    let message = 'The invitation could not be sent.';
+    try {
+      const body = ctx ? await ctx.json() : null;
+      if (body?.error && typeof body.error === 'string' && body.error.length < 200) message = body.error;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(message.charAt(0).toUpperCase() + message.slice(1));
+  }
+  return res.data as InviteResult;
+}
+export async function listStaffInvitations(): Promise<StaffInvitation[]> {
+  return must(await sb().rpc('list_staff_invitations')) as StaffInvitation[];
+}
+export async function cancelStaffInvitation(id: string): Promise<void> {
+  must(await sb().rpc('cancel_staff_invitation', { p_invitation_id: id }));
+}
+export async function listStaffAccounts(): Promise<Profile[]> {
+  return must(await sb().from('profiles').select('*').in('role', ['SUPER_ADMIN', 'ADMIN', 'TRAINER']).order('role').order('full_name')) as Profile[];
+}
+
+// ---------------------------------------------------------------------------
+// Curriculum publishing
+// ---------------------------------------------------------------------------
+export async function getCoursePublishProblems(courseId: string): Promise<string[]> {
+  return (must(await sb().rpc('get_course_publish_problems', { p_course_id: courseId })) as string[] | null) ?? [];
+}
+
+/** Allowed course-media uploads (mirrors the bucket's allowed MIME types). */
+export const COURSE_MEDIA_TYPES: Record<string, string[]> = {
+  video: ['video/mp4', 'video/webm', 'video/quicktime'],
+  captions: ['text/vtt'],
+  image: ['image/jpeg', 'image/png', 'image/webp'],
+};
+export function validateCourseMedia(file: File, kind: keyof typeof COURSE_MEDIA_TYPES, maxBytes: number): string | null {
+  const type = file.type || (file.name.toLowerCase().endsWith('.vtt') ? 'text/vtt' : '');
+  if (!COURSE_MEDIA_TYPES[kind]!.includes(type)) {
+    return kind === 'video' ? 'Upload an MP4 (H.264), WebM or MOV video.' : kind === 'captions' ? 'Captions must be a WebVTT (.vtt) file.' : 'Upload a JPEG, PNG or WebP image.';
+  }
+  if (file.size > maxBytes) return `This file is larger than the ${Math.round(maxBytes / 1024 / 1024)} MB upload limit. Compress it (e.g. 720p H.264) and try again.`;
+  return null;
+}

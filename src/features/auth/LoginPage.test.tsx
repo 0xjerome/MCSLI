@@ -42,7 +42,7 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: /log in/i }));
     expect(await screen.findByText(/confirm your e-mail/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /resend verification/i }));
-    expect(resendVerification).toHaveBeenCalledWith('a@b.test');
+    expect(resendVerification).toHaveBeenCalledWith('a@b.test', undefined); // no captcha token when Turnstile is off
   });
 
   it('returns the user to the page they wanted after login', async () => {

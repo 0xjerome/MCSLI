@@ -168,6 +168,8 @@ additional_redirect_urls = [
   "http://127.0.0.1:5173/reset-password",
   "http://localhost:4173/login",
   "http://localhost:4173/reset-password",
+  "http://localhost:5173/accept-invite",
+  "http://127.0.0.1:5173/accept-invite",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -433,6 +435,10 @@ enabled = true
 # ---------------------------------------------------------------------------
 # MCSLI Edge Functions
 # ---------------------------------------------------------------------------
+[functions.invite-staff]
+# gateway requires a signed-in user; create_staff_invitation() decides who may invite whom
+verify_jwt = true
+
 [functions.identity-document-url]
 # The gateway rejects requests without a valid user JWT before the function runs;
 # the function then re-checks the caller's role itself.
@@ -448,17 +454,27 @@ project_id = "midvngbooepderxboqru"
 
 [remotes.production.auth]
 site_url = "https://mcsli.org"
-# Production redirect allow-list: the app's /login (e-mail confirmation) and /reset-password pages
-# on the public domain and the reserved learning subdomain. localhost is deliberately NOT allowed
-# in production.
+# Production redirect allow-list: /login (e-mail confirmation), /reset-password and /accept-invite
+# (staff invitations) on the public domain, www, the reserved learning subdomain and the Vercel
+# production URL. localhost is deliberately NOT allowed in production.
 additional_redirect_urls = [
   "https://mcsli.org/login",
   "https://mcsli.org/reset-password",
+  "https://mcsli.org/accept-invite",
   "https://www.mcsli.org/login",
   "https://www.mcsli.org/reset-password",
+  "https://www.mcsli.org/accept-invite",
   "https://learn.mcsli.org/login",
   "https://learn.mcsli.org/reset-password",
+  "https://learn.mcsli.org/accept-invite",
+  "https://mcsli.vercel.app/login",
+  "https://mcsli.vercel.app/reset-password",
+  "https://mcsli.vercel.app/accept-invite",
 ]
+
+# Direct Postgres connections must use TLS (PostgREST/Auth/Storage are unaffected).
+[remotes.production.db.ssl_enforcement]
+enabled = true
 
 [remotes.production.db.seed]
 enabled = false

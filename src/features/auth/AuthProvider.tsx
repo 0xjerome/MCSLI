@@ -22,12 +22,12 @@ interface AuthState {
   role: UserRole | null;
   loading: boolean;
   configured: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (input: RegisterInput) => Promise<{ needsEmailConfirmation: boolean }>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<void>;
+  signUp: (input: RegisterInput, captchaToken?: string) => Promise<{ needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string, captchaToken?: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
-  resendVerification: (email: string) => Promise<void>;
+  resendVerification: (email: string, captchaToken?: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -73,17 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
+    const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim().toLowerCase(), password, options: captchaToken ? { captchaToken } : undefined });
     if (error) throw error;
   }, []);
 
-  const signUp = useCallback(async (input: RegisterInput) => {
+  const signUp = useCallback(async (input: RegisterInput, captchaToken?: string) => {
     const { data, error } = await getSupabase().auth.signUp({
       email: input.email.trim().toLowerCase(),
       password: input.password,
       options: {
         emailRedirectTo: `${siteUrl()}/login?verified=1`,
+        captchaToken,
         data: { full_name: input.fullName.trim(), phone: input.phone?.trim() ?? '', nationality: input.nationality, country: input.country.trim(), city: input.city?.trim() ?? '' },
       },
     });
@@ -96,8 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
-  const requestPasswordReset = useCallback(async (email: string) => {
-    const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${siteUrl()}/reset-password` });
+  const requestPasswordReset = useCallback(async (email: string, captchaToken?: string) => {
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${siteUrl()}/reset-password`, captchaToken });
     if (error) throw error;
   }, []);
 
@@ -106,8 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
-  const resendVerification = useCallback(async (email: string) => {
-    const { error } = await getSupabase().auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: `${siteUrl()}/login?verified=1` } });
+  const resendVerification = useCallback(async (email: string, captchaToken?: string) => {
+    const { error } = await getSupabase().auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: `${siteUrl()}/login?verified=1`, captchaToken } });
     if (error) throw error;
   }, []);
 
