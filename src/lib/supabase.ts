@@ -1,11 +1,23 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { reportError } from './observability';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
+
+// Supabase's project URL and publishable key are public browser configuration (RLS is the
+// authorization boundary). Keep env vars preferred, but allow the canonical production hosts
+// to recover if Vercel's build environment was not populated. Random preview deployments and
+// local development still require their own environment variables.
+const productionHosts = new Set(['mcsli.org', 'www.mcsli.org', 'learn.mcsli.org', 'mcsli.vercel.app']);
+const useProductionFallback =
+  typeof window !== 'undefined' && productionHosts.has(window.location.hostname.toLowerCase());
+
+const url = envUrl || (useProductionFallback ? 'https://midvngbooepderxboqru.supabase.co' : undefined);
+const clientKey =
+  envKey || (useProductionFallback ? 'sb_publishable_QEo0bS6t6UkMtBhL6CVACQ_x9yi0kCi' : undefined);
 
 /** True when the browser has a Supabase project to talk to. The public site works without it. */
-export const isSupabaseConfigured = Boolean(url && anonKey && /^https?:\/\//.test(url));
+export const isSupabaseConfigured = Boolean(url && clientKey && /^https?:\/\//.test(url));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Client = SupabaseClient<any, 'public', any>;
@@ -17,7 +29,7 @@ export function getSupabase(): Client {
     throw new SupabaseNotConfiguredError();
   }
   if (!client) {
-    client = createClient(url!, anonKey!, {
+    client = createClient(url!, clientKey!, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
       global: { headers: { 'x-client-info': 'mcsli-platform' } },
     });
@@ -27,7 +39,7 @@ export function getSupabase(): Client {
 
 export class SupabaseNotConfiguredError extends Error {
   constructor() {
-    super('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (see .env.example).');
+    super('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) for non-production hosts.');
     this.name = 'SupabaseNotConfiguredError';
   }
 }
