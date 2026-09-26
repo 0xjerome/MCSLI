@@ -139,7 +139,8 @@ export async function getExam(examId: string): Promise<Exam | null> {
 }
 
 export async function listMyExamAttempts(enrollmentId: string): Promise<ExamAttemptStudent[]> {
-  return must(await sb().from('exam_attempts_student').select('*').eq('enrollment_id', enrollmentId).order('started_at', { ascending: false })) as ExamAttemptStudent[];
+  // own attempts only; scores stay null until results are released (enforced server-side)
+  return must(await sb().rpc('my_exam_attempts', { p_enrollment_id: enrollmentId })) as ExamAttemptStudent[];
 }
 
 export async function listExamQuestions(examId: string): Promise<ExamQuestionStudent[]> {

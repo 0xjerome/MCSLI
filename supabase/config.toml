@@ -466,23 +466,24 @@ project_id = "midvngbooepderxboqru"
 
 [remotes.production.auth]
 site_url = "https://mcsli.org"
-# Production redirect allow-list: /login (e-mail confirmation), /reset-password and /accept-invite
-# (staff invitations) on the public domain, www, the reserved learning subdomain and the Vercel
-# production URL. localhost is deliberately NOT allowed in production.
+# Production redirect allow-list. Supabase Auth only auto-allows the Site URL host; links to any
+# other host must match an allow-list pattern INCLUDING the query string (e.g.
+# /accept-invite?token=…), so each production host gets a `/**` pattern. localhost is deliberately
+# NOT allowed in production.
 additional_redirect_urls = [
-  "https://mcsli.org/login",
-  "https://mcsli.org/reset-password",
-  "https://mcsli.org/accept-invite",
-  "https://www.mcsli.org/login",
-  "https://www.mcsli.org/reset-password",
-  "https://www.mcsli.org/accept-invite",
-  "https://learn.mcsli.org/login",
-  "https://learn.mcsli.org/reset-password",
-  "https://learn.mcsli.org/accept-invite",
-  "https://mcsli.vercel.app/login",
-  "https://mcsli.vercel.app/reset-password",
-  "https://mcsli.vercel.app/accept-invite",
+  "https://mcsli.org/**",
+  "https://www.mcsli.org/**",
+  "https://learn.mcsli.org/**",
+  "https://mcsli.vercel.app/**",
 ]
+
+[remotes.production.auth.email]
+# 24 h: staff invitation links (and, unavoidably, confirmation/reset links – one setting) stay
+# valid as long as the invitation record itself (create_staff_invitation default). The security
+# advisor flags anything above 1 h; accepted deliberately for MCSLI's 24-hour invitation policy.
+otp_expiry = 86400
+# minimum interval between e-mails to the same address (dashboard: "Minimum interval per user")
+max_frequency = "60s"
 
 # Direct Postgres connections must use TLS (PostgREST/Auth/Storage are unaffected).
 [remotes.production.db.ssl_enforcement]

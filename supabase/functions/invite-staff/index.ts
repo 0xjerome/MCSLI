@@ -71,6 +71,7 @@ function log(level: 'info' | 'warn' | 'error', event: string, extra: Record<stri
 
 // Map provider errors to reasons that are safe to show an administrator.
 function safeEmailError(message: string): string {
+  if (/security purposes|only request this after/i.test(message)) return 'An e-mail was sent to this address less than a minute ago. Wait a minute, then try again.';
   if (/rate limit/i.test(message)) return 'E-mail rate limit reached. Try again later.';
   if (/not authorized|not allowed|smtp|sending/i.test(message)) return 'The e-mail provider refused the message. Check the SMTP (Resend) configuration.';
   return 'The invitation e-mail could not be sent.';
@@ -114,6 +115,7 @@ Deno.serve(async (req) => {
     if (code === '42501') return json(req, { error: invErr?.message ?? 'forbidden' }, 403);
     if (code === '23505') return json(req, { error: invErr?.message ?? 'already staff' }, 409);
     if (code === '22023') return json(req, { error: invErr?.message ?? 'invalid request' }, 400);
+    if (code === 'P0001') return json(req, { error: invErr?.message ?? 'please wait before sending another invitation' }, 429);
     return json(req, { error: 'invitation could not be created' }, 500);
   }
 

@@ -10,7 +10,8 @@ function must<T>(res: { data: T | null; error: { message: string } | null }): T 
 }
 
 export async function getMyIdentity(): Promise<IdentitySummary | null> {
-  return must(await sb().from('identity_summary').select('*').maybeSingle()) as IdentitySummary | null;
+  const rows = must(await sb().rpc('get_my_identity')) as IdentitySummary[] | null;
+  return rows?.[0] ?? null;
 }
 
 export async function listMyIdentityDocuments(): Promise<IdentityDocument[]> {

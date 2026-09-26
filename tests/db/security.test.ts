@@ -78,9 +78,11 @@ describe('profiles and roles', () => {
   it("a student cannot read another student's profile or the directory of all users", async () => {
     expect(await rows(alice, `select id from public.profiles where id = $1`, [bob.id])).toHaveLength(0);
     // classmates appear by name only; anonymous callers see nobody
-    const dir = await rows(alice, `select * from public.public_profiles where id = $1`, [bob.id]);
+    const dir = await rows(alice, `select * from public.public_profiles_lookup(array[$1]::uuid[])`, [bob.id]);
     expect(Object.keys(dir[0]).sort()).toEqual(['avatar_path', 'full_name', 'id', 'role']);
-    expect(await expectDenied(rows(null, `select * from public.public_profiles`))).toMatch(/permission denied/);
+    expect(await expectDenied(rows(null, `select * from public.public_profiles_lookup(array[$1]::uuid[])`, [bob.id]))).toMatch(/permission denied/);
+    // the dropped SECURITY DEFINER views are gone (advisor: security_definer_view)
+    expect((await client.query(`select count(*)::int as n from pg_views where schemaname = 'public' and viewname in ('public_profiles', 'identity_summary', 'exam_attempts_student', 'site_content_public')`)).rows[0].n).toBe(0);
   });
 
   it('trainers see only students of their assigned courses', async () => {
@@ -235,7 +237,9 @@ describe('identity documents and storage', () => {
   });
 
   it("students cannot see another student's identity data or masked number", async () => {
-    expect(await rows(bob, `select * from public.identity_summary`)).toHaveLength(0);
+    expect(await rows(bob, `select * from public.get_my_identity()`)).toHaveLength(0);
+    expect(await expectDenied(rows(bob, `select * from public.admin_list_identities()`))).toMatch(/not authorised/);
+    expect((await rows(admin, `select user_id from public.admin_list_identities('pending')`)).map((r) => r.user_id)).toContain(alice.id);
     expect(await rows(bob, `select * from public.identity_documents`)).toHaveLength(0);
     expect(await expectDenied(rows(bob, `select * from public.identity_verifications`))).toMatch(/permission denied/);
     const vid = (await client.query(`select id from public.identity_verifications where user_id = $1`, [alice.id])).rows[0].id;
@@ -290,7 +294,7 @@ describe('discussions, tickets, notifications, audit log, settings', () => {
 
   it('platform settings are admin-only; the public subset excludes sensitive keys', async () => {
     expect(await rows(alice, `select * from public.platform_settings`)).toHaveLength(0);
-    expect(await rows(null, `select * from public.platform_settings`)).toHaveLength(0);
+    expect(await expectDenied(rows(null, `select * from public.platform_settings`))).toMatch(/permission denied/);
     expect(await expectDenied(rows(alice, `select public.set_platform_setting('registration_open', 'false')`))).toMatch(/not authorised/);
     const pub = (await rows(null, `select public.get_public_settings() as s`))[0].s;
     expect(Object.keys(pub)).not.toContain('identity_retention_days');

@@ -132,9 +132,8 @@ export interface IdentityRow extends IdentitySummary {
   profile?: Pick<Profile, 'full_name' | 'email' | 'nationality'> | null;
 }
 export async function listIdentities(status?: IdentityStatus): Promise<IdentityRow[]> {
-  let q = sb().from('identity_summary').select('*').order('submitted_at', { ascending: true });
-  if (status) q = q.eq('status', status);
-  const rows = must(await q) as IdentityRow[];
+  // admin-only SECURITY DEFINER function (masked numbers, ordered by submission)
+  const rows = must(await sb().rpc('admin_list_identities', { p_status: status ?? null })) as IdentityRow[];
   if (!rows.length) return rows;
   const ids = rows.map((r) => r.user_id);
   const profiles = must(await sb().from('profiles').select('id, full_name, email, nationality').in('id', ids)) as (Pick<Profile, 'full_name' | 'email' | 'nationality'> & { id: string })[];

@@ -10,6 +10,8 @@
  * Hosted staging/production (creates clearly labelled [TEST] records only, never touches others):
  *   SUPABASE_URL=… SUPABASE_ANON_KEY=… SUPABASE_SERVICE_ROLE_KEY=… E2E_ALLOW_REMOTE=1 \
  *   E2E_EMAIL_DOMAIN=<a domain whose mail you can discard> node scripts/e2e-supabase.mjs
+ *   With production e-mail (Resend) connected, route every test address to a mailbox you control:
+ *   E2E_EMAIL_TEMPLATE="you+mcsli-e2e-{who}-{run}@gmail.com"  (invitation e-mails are really sent)
  *   On a hosted project e-mails cannot be read by the script, so confirmation/reset links are
  *   obtained with the Auth admin API (generateLink) instead of the inbox.
  *
@@ -18,6 +20,7 @@
  * [TEST] payment method row is added (and disabled again at the end).
  */
 import { execFileSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 // ---------------------------------------------------------------------------
@@ -45,7 +48,25 @@ const RUN = Date.now().toString(36);
 const DOMAIN = process.env.E2E_EMAIL_DOMAIN ?? 'mcsli-e2e.test';
 // Random per run and never printed, so leftover [TEST] accounts cannot be logged into from the logs.
 const PASSWORD = `E2e-${crypto.randomUUID()}-Aa9!`;
-const email = (who) => `mcsli-e2e-${who}-${RUN}@${DOMAIN}`;
+const TEMPLATE = process.env.E2E_EMAIL_TEMPLATE; // e.g. "you+mcsli-e2e-{who}-{run}@gmail.com"
+const email = (who) => (TEMPLATE ? TEMPLATE.replaceAll('{who}', who).replaceAll('{run}', RUN) : `mcsli-e2e-${who}-${RUN}@${DOMAIN}`);
+
+/** RFC 6238 TOTP (SHA-1, 30 s, 6 digits) – what an authenticator app computes from the enrolment secret. */
+function totp(base32Secret, at = Date.now()) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const ch of base32Secret.replace(/=+$/, '').toUpperCase()) {
+    const v = alphabet.indexOf(ch);
+    if (v >= 0) bits += v.toString(2).padStart(5, '0');
+  }
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((b) => parseInt(b, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30000)));
+  const h = createHmac('sha1', key).update(counter).digest();
+  const o = h[h.length - 1] & 0xf;
+  const code = (((h[o] & 0x7f) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6;
+  return String(code).padStart(6, '0');
+}
 
 // ---------------------------------------------------------------------------
 // tiny test harness
@@ -163,6 +184,9 @@ async function sql(query, params = []) {
 }
 const tinyPng = () => new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0))], { type: 'image/png' });
 const tinyPdf = () => new Blob(['%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'], { type: 'application/pdf' });
+const tinyMp4 = () => new Blob([Uint8Array.from([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32, 0, 0, 0, 0])], { type: 'video/mp4' });
+const tinyVtt = () => new Blob(['WEBVTT\n\n00:00.000 --> 00:02.000\n[TEST] caption\n'], { type: 'text/vtt' });
+const signedFetch = (url) => fetch(isLocal ? url.replace(/^https?:\/\/[^/]+/, cfg.url.replace(/\/$/, '')) : url);
 
 // ---------------------------------------------------------------------------
 // the run
@@ -280,12 +304,13 @@ await step('first SUPER_ADMIN via audited bootstrap (direct database session onl
  * the Auth admin API and a fresh token is issued through create_staff_invitation (same acceptance path).
  */
 async function inviteAndAccept(inviter, who, role, fullName) {
-  const r = await inviter.client.functions.invoke('invite-staff', { body: { email: email(who), full_name: fullName, role } });
-  if (r.error) throw new Error(`invite-staff: ${r.response?.status} ${await r.response?.text?.()}`);
   const c = newClient();
   const user = { client: c, email: email(who) };
   let token;
   if (cfg.mail) {
+    const r = await inviter.client.functions.invoke('invite-staff', { body: { email: email(who), full_name: fullName, role } });
+    if (r.error) throw new Error(`invite-staff: ${r.response?.status} ${await r.response?.text?.()}`);
+    user.inviteEmailSent = r.data.email_sent;
     assert(r.data.email_sent === true, `invitation e-mail not sent: ${r.data.email_error}`);
     const mail = await waitForMail(user.email, /invit/i);
     const location = await followVerify(linkFrom(mail.HTML));
@@ -297,6 +322,8 @@ async function inviteAndAccept(inviter, who, role, fullName) {
     ok(await c.auth.updateUser({ password: PASSWORD }), 'invitee sets own password');
     user.id = (await c.auth.getUser()).data.user.id;
   } else {
+    // hosted: the script cannot read the mailbox, so the token comes from the same database
+    // function the Edge Function uses (the real e-mail path is exercised by the Resend step)
     const created = await signUp(who, fullName);
     await confirmEmail(created);
     Object.assign(user, created);
@@ -307,7 +334,6 @@ async function inviteAndAccept(inviter, who, role, fullName) {
   assert(acc.ok === true && acc.role === role, JSON.stringify(acc));
   const reuse = ok(await user.client.rpc('accept_staff_invitation', { p_token: token }), 'reuse');
   assert(reuse.ok === false && reuse.reason === 'used', 'token is single-use');
-  user.inviteEmailSent = r.data.email_sent;
   return user;
 }
 
@@ -315,7 +341,7 @@ await step('SUPER_ADMIN invites an ADMIN (e-mail link → own password → role 
   ctx.admin = await inviteAndAccept(ctx.super, 'admin', 'ADMIN', '[TEST] Admin');
   const p = ok(await ctx.admin.client.from('profiles').select('role').eq('id', ctx.admin.id).single(), 'profile');
   assert(p.role === 'ADMIN', `role ${p.role}`);
-  return cfg.mail ? 'real invitation e-mail followed' : `hosted: e-mail_sent=${ctx.admin.inviteEmailSent} (SMTP not yet connected); acceptance via issued token`;
+  return cfg.mail ? 'real invitation e-mail followed' : 'hosted: acceptance via an issued token (e-mail path covered by the Resend step)';
 });
 await step('ADMIN invites a TRAINER; ADMIN cannot invite ADMIN; trainers/students/anonymous cannot invite', async () => {
   ctx.trainer = await inviteAndAccept(ctx.admin, 'trainer', 'TRAINER', '[TEST] Trainer');
@@ -352,6 +378,51 @@ await step('invitation misuse: wrong account, cancelled and expired links are re
   assert(staffRead.error || staffRead.data.length === 0, 'students cannot list invitations');
 });
 
+await step('Resend replaces the pending link: old link cancelled, new link valid for 24 h', async () => {
+  const addr = email('resend');
+  const send = () => ctx.admin.client.functions.invoke('invite-staff', { body: { email: addr, full_name: '[TEST] Resend', role: 'TRAINER' } });
+  const first = await send();
+  if (first.error) throw new Error(`first: ${first.response?.status} ${await first.response?.text?.()}`);
+  // an immediate resend must be refused BEFORE the working link is cancelled
+  const tooSoon = await send();
+  assert(tooSoon.error && tooSoon.response?.status === 429, `immediate resend status ${tooSoon.response?.status}`);
+  const still = ok(await ctx.admin.client.rpc('list_staff_invitations'), 'list').find((i) => i.id === first.data.invitation_id);
+  assert(still?.status === 'pending', 'first link untouched by the throttled resend');
+  await new Promise((r) => setTimeout(r, 61_000));
+  const second = await send();
+  if (second.error) throw new Error(`second: ${second.response?.status} ${await second.response?.text?.()}`);
+  assert(first.data.email_sent && second.data.email_sent, `e-mails sent: ${first.data.email_sent}/${second.data.email_sent} ${second.data.email_error ?? ''}`);
+  const list = ok(await ctx.admin.client.rpc('list_staff_invitations'), 'list').filter((i) => i.email === addr);
+  const old = list.find((i) => i.id === first.data.invitation_id);
+  const cur = list.find((i) => i.id === second.data.invitation_id);
+  assert(old?.status === 'cancelled' && cur?.status === 'pending', `statuses ${old?.status}/${cur?.status}`);
+  const hours = (new Date(cur.expires_at) - new Date(cur.created_at)) / 36e5;
+  assert(Math.abs(hours - 24) < 0.05, `validity ${hours.toFixed(2)} h`);
+  if (cfg.mail) {
+    const invite = await waitForMail(addr, /invited/i); // 1st: Auth "invite user" e-mail
+    // 2nd: the account now exists → magic link (or, while still unconfirmed, a confirmation e-mail);
+    // either link lands on /accept-invite?token=… with a session
+    const magic = await waitForMail(addr, /magic|sign-?in|confirm/i);
+    const oldTok = new URL(await followVerify(linkFrom(invite.HTML)), SITE).searchParams.get('token');
+    const u = new URL(await followVerify(linkFrom(magic.HTML)), SITE);
+    assert(u.origin + u.pathname === `${SITE}/accept-invite`, `resend link returned to ${u.origin + u.pathname}`);
+    const newTok = u.searchParams.get('token');
+    assert(oldTok && newTok && oldTok !== newTok, 'distinct tokens');
+    const c = newClient();
+    const hash = new URLSearchParams(u.hash.slice(1));
+    ok(await c.auth.setSession({ access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') }), 'session');
+    ok(await c.auth.updateUser({ password: PASSWORD }), 'password');
+    const stale = ok(await c.rpc('accept_staff_invitation', { p_token: oldTok }), 'old token');
+    assert(stale.ok === false && stale.reason === 'cancelled', JSON.stringify(stale));
+    const acc = ok(await c.rpc('accept_staff_invitation', { p_token: newTok }), 'new token');
+    assert(acc.ok === true && acc.role === 'TRAINER', JSON.stringify(acc));
+    ctx.resendUser = { id: (await c.auth.getUser()).data.user.id, email: addr, client: c };
+    return 'both e-mails received; old link cancelled, new link accepted';
+  }
+  ok(await ctx.admin.client.rpc('cancel_staff_invitation', { p_invitation_id: cur.id }), 'tidy');
+  return 'hosted: invitation + resend e-mails handed to Resend for the test mailbox';
+});
+
 begin('Course setup ([TEST] course, admin tools)');
 await step('admin creates a 2-month [TEST] course with pricing, lessons, quiz and final exam', async () => {
   const a = ctx.admin.client;
@@ -366,6 +437,17 @@ await step('admin creates a 2-month [TEST] course with pricing, lessons, quiz an
   const lessons = ok(await a.from('lessons').insert(mods.map((mo, i) => ({ module_id: mo.id, title: `[TEST] Lesson ${i + 1}`, video_url: 'https://mcsli-test.invalid/test-lesson.mp4' }))).select('id, module_id'), 'lessons');
   ctx.l1 = lessons.find((l) => l.module_id === mods.find((mo) => mo.month_id === ctx.m1.id).id).id;
   ctx.l2 = lessons.find((l) => l.module_id === mods.find((mo) => mo.month_id === ctx.m2.id).id).id;
+  // real media pipeline: private course-media bucket (video + captions + thumbnail), MIME whitelist
+  const media = { m1: `lessons/${RUN}/m1.mp4`, m1c: `captions/${RUN}/m1.vtt`, m1t: `thumbnails/${RUN}/m1.png`, m2: `lessons/${RUN}/m2.mp4` };
+  ok(await a.storage.from('course-media').upload(media.m1, tinyMp4(), { contentType: 'video/mp4' }), 'upload video');
+  ok(await a.storage.from('course-media').upload(media.m1c, tinyVtt(), { contentType: 'text/vtt' }), 'upload captions');
+  ok(await a.storage.from('course-media').upload(media.m1t, tinyPng(), { contentType: 'image/png' }), 'upload thumbnail');
+  ok(await a.storage.from('course-media').upload(media.m2, tinyMp4(), { contentType: 'video/mp4' }), 'upload month-2 video');
+  const badType = await a.storage.from('course-media').upload(`lessons/${RUN}/evil.txt`, new Blob(['x'], { type: 'text/plain' }), { contentType: 'text/plain' });
+  assert(badType.error, 'bucket refuses non-media types');
+  ok(await a.from('lessons').update({ video_path: media.m1, captions_path: media.m1c, thumbnail_path: media.m1t, video_url: null }).eq('id', ctx.l1), 'lesson 1 media');
+  ok(await a.from('lessons').update({ video_path: media.m2, video_url: null }).eq('id', ctx.l2), 'lesson 2 media');
+  ctx.media = media;
   ctx.quiz = ok(await a.from('quizzes').insert({ month_id: ctx.m1.id, title: '[TEST] Month 1 quiz', passing_score: 70 }).select().single(), 'quiz');
   ok(await a.from('quiz_questions').insert([
     { quiz_id: ctx.quiz.id, position: 1, prompt: '[TEST] Q1', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'a', explanation: '[TEST] A is right' },
@@ -403,7 +485,7 @@ await step('student submits NIN + uploads a private scan', async () => {
   ok(await ctx.student.client.storage.from('identity-documents').upload(rel, tinyPng(), { contentType: 'image/png' }), 'upload');
   ctx.docId = ok(await ctx.student.client.rpc('register_identity_document', { p_storage_path: `identity-documents/${rel}`, p_file_name: 'nin.png', p_mime: 'image/png', p_size: 68 }), 'register');
   ctx.docPath = rel;
-  const s = ok(await ctx.student.client.from('identity_summary').select('id_number_masked, status').single(), 'summary');
+  const s = ok(await ctx.student.client.rpc('get_my_identity'), 'summary')[0];
   assert(s.id_number_masked === '••••••••••TEST' && s.status === 'pending', `masked ${s.id_number_masked}`);
   return 'masked ••••••••••TEST';
 });
@@ -441,7 +523,8 @@ await step('admin opens the scan through the Edge Function: 120 s signed URL, au
   assert(!own.error && own.data.url, `owner may view own scan (${own.response?.status} ${own.error ? await own.response?.text?.() : ''})`);
 });
 await step('admin reveals the full number (audited, never logged) and verifies the identity', async () => {
-  const vid = ok(await ctx.admin.client.from('identity_summary').select('id').eq('user_id', ctx.student.id).single(), 'summary').id;
+  const vid = ok(await ctx.admin.client.rpc('admin_list_identities'), 'summary').find((r) => r.user_id === ctx.student.id).id;
+  ctx.vid = vid;
   const n = ok(await ctx.admin.client.rpc('admin_reveal_identity_number', { p_verification_id: vid, p_reason: '[TEST] e2e verification' }), 'reveal');
   assert(n === 'CM90000000TEST', 'decrypted number');
   await denied(ctx.trainer.client.rpc('admin_reveal_identity_number', { p_verification_id: vid }));
@@ -474,6 +557,12 @@ await step('student uploads a receipt and submits registration + installment 1 (
   ctx.pay1 = ok(await ctx.student.client.rpc('submit_payment', { p_enrollment_id: ctx.enrollment, p_purpose: 'tuition', p_installment_number: 1, p_method_id: ctx.method.id, p_amount: 175000, p_payer_name: '[TEST] Payer', p_reference: `TEST-I1-${RUN}`, p_paid_at: new Date().toISOString().slice(0, 10) }), 'installment 1');
   const mine = ok(await ctx.student.client.from('payments').select('status'), 'history');
   assert(mine.length === 2 && mine.every((p) => p.status === 'pending'), 'own history, pending');
+  ctx.proofPath = rel;
+  assert((await ctx.other.client.storage.from('payment-proofs').createSignedUrl(rel, 60)).error, 'another student cannot sign the receipt');
+  assert((await ctx.trainer.client.storage.from('payment-proofs').createSignedUrl(rel, 60)).error, 'trainers cannot open receipts');
+  ok(await ctx.admin.client.storage.from('payment-proofs').createSignedUrl(rel, 60), 'admin reviews the receipt');
+  const traversal = await ctx.student.client.storage.from('payment-proofs').upload(`${ctx.student.id}/../${ctx.other.id}/evil.pdf`, tinyPdf(), { contentType: 'application/pdf' });
+  assert(traversal.error, 'path traversal refused');
 });
 await step('student cannot confirm own payment; others cannot see it; trainer cannot confirm', async () => {
   const upd = await ctx.student.client.from('payments').update({ status: 'confirmed' }).eq('id', ctx.pay1).select();
@@ -513,6 +602,23 @@ await step('month 1 content opens; month 2 content stays hidden and unusable', a
   assert(l.some((x) => x.id === ctx.l1) && !l.some((x) => x.id === ctx.l2), 'only month 1 lesson visible');
   await denied(ctx.student.client.rpc('save_lesson_progress', { p_lesson_id: ctx.l2, p_position_seconds: 5, p_completed: true }), /locked/);
   ok(await ctx.student.client.rpc('save_lesson_progress', { p_lesson_id: ctx.l1, p_position_seconds: 12, p_completed: true }), 'complete lesson');
+});
+await step('course media: signed URLs only for unlocked months, only for enrolled students/staff; no student uploads', async () => {
+  const sign = (c, p) => c.storage.from('course-media').createSignedUrl(p, 60);
+  const s = ok(await sign(ctx.student.client, ctx.media.m1), 'student month-1 video');
+  assert(/token=/.test(s.signedUrl), 'signed');
+  const res = await signedFetch(s.signedUrl);
+  assert(res.status === 200, `download status ${res.status}`);
+  ok(await sign(ctx.student.client, ctx.media.m1c), 'captions');
+  ok(await sign(ctx.student.client, ctx.media.m1t), 'thumbnail');
+  assert((await sign(ctx.student.client, ctx.media.m2)).error, 'locked month video not signable');
+  assert((await sign(ctx.other.client, ctx.media.m1)).error, 'enrolled-but-unpaid student cannot sign');
+  assert((await sign(anon, ctx.media.m1)).error, 'anonymous cannot sign');
+  ok(await sign(ctx.trainer.client, ctx.media.m2), 'assigned trainer');
+  const up = await ctx.student.client.storage.from('course-media').upload(`lessons/${RUN}/student.mp4`, tinyMp4(), { contentType: 'video/mp4' });
+  assert(up.error, 'students cannot upload course media');
+  const listed = ok(await ctx.student.client.storage.from('course-media').list(`lessons/${RUN}`), 'list');
+  assert(!listed.some((f) => f.name === 'm2.mp4'), 'locked media is not even listed');
 });
 await step('quiz: answers hidden from the browser; failed attempt reveals nothing; pass scored server-side', async () => {
   const direct = await ctx.student.client.from('quiz_questions').select('correct_answer').eq('quiz_id', ctx.quiz.id);
@@ -555,6 +661,7 @@ await step('installment 2 confirmed + PASS → month 2 UNLOCKED (student notifie
   const n = ok(await ctx.student.client.from('notifications').select('title').eq('type', 'month_unlocked'), 'notifications');
   assert(n.some((x) => /Month 2/.test(x.title)), 'month 2 unlocked notification');
   ok(await ctx.student.client.rpc('save_lesson_progress', { p_lesson_id: ctx.l2, p_position_seconds: 12, p_completed: true }), 'month 2 lesson');
+  ok(await ctx.student.client.storage.from('course-media').createSignedUrl(ctx.media.m2, 60), 'month-2 video now signable');
 });
 await step('admin override requires a reason and is audited; trainers cannot override', async () => {
   await denied(ctx.trainer.client.rpc('override_month_unlock', { p_enrollment_id: ctx.otherEnrollment, p_month_id: ctx.m2.id, p_reason: '[TEST] trainer attempt' }));
@@ -591,7 +698,7 @@ await step('start (server deadline), autosave, resume, submit', async () => {
   ctx.practical = pr;
 });
 await step('score hidden until release; trainer grades; results released', async () => {
-  const hidden = ok(await ctx.student.client.from('exam_attempts_student').select('total_score, status').eq('id', ctx.attempt).single(), 'hidden');
+  const hidden = ok(await ctx.student.client.rpc('my_exam_attempts', { p_enrollment_id: ctx.enrollment }), 'hidden').find((a) => a.id === ctx.attempt);
   assert(hidden.total_score === null, 'score hidden before grading/release');
   const raw = await ctx.student.client.from('exam_attempts').select('total_score');
   assert(raw.error, 'score column not readable directly');
@@ -599,7 +706,7 @@ await step('score hidden until release; trainer grades; results released', async
   const g = ok(await ctx.trainer.client.rpc('grade_exam_attempt', { p_attempt_id: ctx.attempt, p_manual_scores: { [ctx.practical]: 2 }, p_feedback: '[TEST] clear signing' }), 'grade');
   assert(Number(g.total_score) === 100 && g.passed, `total ${g.total_score}`);
   ok(await ctx.trainer.client.rpc('release_exam_results', { p_exam_id: ctx.exam.id }), 'release');
-  const shown = ok(await ctx.student.client.from('exam_attempts_student').select('total_score, passed').eq('id', ctx.attempt).single(), 'released');
+  const shown = ok(await ctx.student.client.rpc('my_exam_attempts', { p_enrollment_id: ctx.enrollment }), 'released').find((a) => a.id === ctx.attempt);
   assert(Number(shown.total_score) === 100 && shown.passed, 'score visible after release');
 });
 
@@ -627,8 +734,8 @@ await step('public verification (anonymous) returns only safe fields', async () 
   assert(keys === 'certificate_number,certificate_title,completion_date,course_title,found,issued_at,revoked_at,status,student_name', keys);
   const nf = ok(await anon.rpc('verify_certificate', { p_number: 'MCSLI-2000-ZZZZZZ' }), 'not found');
   assert(nf.found === false, 'unknown number');
-  const table = ok(await anon.from('certificates').select('*'), 'anon table read');
-  assert(table.length === 0, 'anonymous cannot list certificates');
+  const table = await anon.from('certificates').select('*');
+  assert(table.error && /permission denied/i.test(table.error.message), 'anonymous cannot read the certificates table at all');
 });
 await step('revoke → verification shows revoked; reissue → new number verifies', async () => {
   ok(await ctx.admin.client.rpc('revoke_certificate', { p_certificate_id: ctx.cert.id, p_reason: '[TEST] name correction' }), 'revoke');
@@ -684,11 +791,15 @@ await step('notifications: own only, cannot be forged or rewritten, mark as read
 });
 
 begin('Negative security checks (anonymous + cross-user)');
-await step('anonymous: no private data, no protected RPCs, no admin settings', async () => {
-  for (const t of ['profiles', 'enrollments', 'payments', 'identity_documents', 'assessment_attempts', 'notifications', 'audit_logs', 'platform_settings', 'support_tickets']) {
+await step('anonymous: private tables refuse REST access outright; the public catalogue and contact form still work', async () => {
+  for (const t of ['profiles', 'enrollments', 'payments', 'identity_verifications', 'identity_documents', 'assessment_attempts', 'notifications', 'audit_logs', 'platform_settings', 'support_tickets', 'certificates', 'site_content', 'staff_invitations', 'email_outbox', 'payment_methods']) {
     const r = await anon.from(t).select('*').limit(1);
-    assert(r.error || r.data.length === 0, `anon read ${t}`);
+    assert(r.error && /permission denied/i.test(r.error.message), `anon ${t}: ${r.error?.message ?? 'rows returned'}`);
   }
+  assert(ok(await anon.from('courses').select('id').eq('id', ctx.course.id), 'catalogue').length === 1, 'published course visible');
+  assert(Array.isArray(ok(await anon.rpc('get_site_content_public'), 'site content')), 'public content');
+  ok(await anon.from('contact_messages').insert({ full_name: '[TEST] Visitor', email: `mcsli-e2e-contact-${RUN}@mcsli-e2e.test`, body: `[TEST] contact ${RUN}` }), 'contact form');
+  assert((await anon.from('contact_messages').select('id')).error, 'anon cannot read messages');
   for (const [fn, args] of [['admin_dashboard_stats', {}], ['review_payment', { p_payment_id: ctx.pay1, p_decision: 'confirmed' }], ['enroll_in_course', { p_course_id: ctx.course.id, p_plan: 'full' }], ['issue_certificate', { p_enrollment_id: ctx.enrollment }], ['get_my_course_map', { p_enrollment_id: ctx.enrollment }]]) {
     const r = await anon.rpc(fn, args);
     assert(r.error, `anon rpc ${fn}`);
@@ -704,10 +815,61 @@ await step("cross-student: profile, payments, assessments, certificates, identit
   }
   const aa = ok(await c.from('assessment_attempts').select('*').eq('enrollment_id', ctx.enrollment), 'attempts');
   assert(aa.length === 0, 'other student read assessments');
-  const idsum = ok(await c.from('identity_summary').select('*').eq('user_id', ctx.student.id), 'identity');
+  const idsum = ok(await c.rpc('get_my_identity'), 'identity');
   assert(idsum.length === 0, 'other student read identity summary');
+  const adminList = await c.rpc('admin_list_identities');
+  assert(adminList.error, 'student cannot list identities');
   const totals = await c.rpc('fn_confirmed_totals', { p_enrollment_id: ctx.enrollment });
   assert(totals.error, 'payment totals helper not callable');
+});
+await step('manipulated user_metadata cannot grant a role', async () => {
+  ok(await ctx.student.client.auth.updateUser({ data: { role: 'SUPER_ADMIN', account_status: 'active', is_admin: true } }), 'metadata update');
+  const p = ok(await ctx.student.client.from('profiles').select('role').eq('id', ctx.student.id).single(), 'profile');
+  assert(p.role === 'STUDENT', `role ${p.role}`);
+  await denied(ctx.student.client.rpc('admin_dashboard_stats'));
+  assert(ok(await ctx.student.client.rpc('is_admin'), 'is_admin') === false, 'is_admin() false');
+  assert((await ctx.student.client.from('profiles').update({ role: 'ADMIN' }).eq('id', ctx.student.id)).error, 'direct role write refused');
+});
+await step('guessed identifiers reveal nothing', async () => {
+  const rnd = crypto.randomUUID();
+  await denied(ctx.other.client.rpc('get_my_course_map', { p_enrollment_id: rnd }));
+  await denied(ctx.other.client.rpc('authorize_identity_document_access', { p_document_id: rnd }), /not found/);
+  await denied(ctx.other.client.rpc('authorize_identity_document_access', { p_document_id: ctx.docId }), /not found/);
+  assert(ok(await ctx.other.client.from('payments').select('id').eq('id', ctx.pay1), 'payment by id').length === 0, 'guessed payment id');
+  assert(ok(await ctx.other.client.from('identity_documents').select('id').eq('id', ctx.docId), 'document by id').length === 0, 'guessed document id');
+  assert(ok(await ctx.other.client.from('lessons').select('id').eq('id', ctx.l2), 'lesson by id').length === 0, 'guessed locked lesson id');
+  assert(ok(await anon.rpc('verify_certificate', { p_number: 'MCSLI-2026-AAAAAA' }), 'certificate').found === false, 'guessed certificate number');
+});
+await step('trainer boundaries: no payment configuration, settings, staff administration or identity data', async () => {
+  const t = ctx.trainer.client;
+  const pm = await t.from('payment_methods').update({ is_enabled: false }).eq('id', ctx.method.id).select();
+  assert(!pm.error && pm.data.length === 0, 'trainer cannot edit payment methods');
+  assert(ok(await t.from('platform_settings').select('*'), 'settings').length === 0, 'no platform settings');
+  await denied(t.rpc('review_payment', { p_payment_id: ctx.pay1, p_decision: 'confirmed' }));
+  await denied(t.rpc('admin_set_user_role', { p_user_id: ctx.other.id, p_role: 'TRAINER' }));
+  await denied(t.rpc('admin_list_identities'));
+  await denied(t.rpc('admin_reveal_identity_number', { p_verification_id: ctx.vid }));
+  assert((await t.rpc('list_staff_invitations')).error, 'no invitation list');
+  assert((await t.storage.from('identity-documents').createSignedUrl(ctx.docPath, 60)).error, 'no identity scans');
+});
+await step('auth redirect allow-list: /accept-invite?token=… and /reset-password survive on every production host', async () => {
+  if (isLocal) return 'local stack: site host only';
+  const hosts = ['https://mcsli.org', 'https://www.mcsli.org', 'https://mcsli.vercel.app'];
+  for (const h of hosts) {
+    for (const [type, path] of [['magiclink', '/accept-invite?token=redirect-check'], ['recovery', '/reset-password']]) {
+      const r = ok(await service.auth.admin.generateLink({ type, email: ctx.other.email, options: { redirectTo: `${h}${path}` } }), `link ${h}${path}`);
+      const loc = await followVerify(r.properties.action_link);
+      assert(loc.startsWith(`${h}${path}`), `${type} → ${loc.replace(/(access_token|refresh_token|code)=[^&#]+/g, '$1=…').slice(0, 140)}`);
+    }
+  }
+  return `${hosts.length} hosts × 2 flows kept their destination`;
+});
+await step('a suspended account cannot act; it works again after reactivation', async () => {
+  ok(await ctx.admin.client.rpc('admin_set_account_status', { p_user_id: ctx.other.id, p_status: 'suspended', p_reason: '[TEST] suspension check' }), 'suspend');
+  assert((await ctx.other.client.from('discussion_threads').insert({ course_id: ctx.course.id, author_id: ctx.other.id, title: '[TEST] suspended', body: 'x' })).error, 'suspended account cannot post');
+  await denied(ctx.other.client.rpc('submit_identity', { p_doc_type: 'passport', p_id_number: 'P1234567', p_full_name: '[TEST] Other', p_issuing_country: 'Kenya', p_consent: true }), /suspended/);
+  ok(await ctx.admin.client.rpc('admin_set_account_status', { p_user_id: ctx.other.id, p_status: 'active', p_reason: '[TEST] reactivated' }), 'reactivate');
+  ok(await ctx.other.client.from('discussion_threads').insert({ course_id: ctx.course.id, author_id: ctx.other.id, title: '[TEST] back', body: '[TEST] reactivated' }), 'posts again');
 });
 await step('certificate verification rate limit (30 / 10 min per client)', async () => {
   let limited = false;
@@ -724,19 +886,58 @@ await step('certificate verification rate limit (30 / 10 min per client)', async
 // ---------------------------------------------------------------------------
 // Nothing privileged or publicly visible is left behind: the [TEST] course is unpublished and
 // archived, the [TEST] payment method disabled, and [TEST] staff accounts demoted and suspended.
+begin('Staff two-factor authentication');
+await step('TOTP enrol + verify raises the session to aal2; a wrong code is refused', async () => {
+  const e = ok(await ctx.super.client.auth.mfa.enroll({ factorType: 'totp', friendlyName: '[TEST] e2e' }), 'enroll');
+  assert((await ctx.super.client.auth.mfa.challengeAndVerify({ factorId: e.id, code: '000000' })).error, 'wrong code refused');
+  ok(await ctx.super.client.auth.mfa.challengeAndVerify({ factorId: e.id, code: totp(e.totp.secret) }), 'verify');
+  const aal = ok(await ctx.super.client.auth.mfa.getAuthenticatorAssuranceLevel(), 'aal');
+  assert(aal.currentLevel === 'aal2', `aal ${aal.currentLevel}`);
+});
+await step('require_staff_mfa: only an aal2 super admin can enable it; aal1 staff are then blocked by the database; students unaffected', async () => {
+  if (!isLocal) return 'skipped on the hosted project (would affect real staff); enforced on the local stack';
+  const fresh = newClient();
+  ok(await fresh.auth.signInWithPassword({ email: ctx.super.email, password: PASSWORD }), 'aal1 login');
+  await denied(fresh.rpc('set_platform_setting', { p_key: 'require_staff_mfa', p_value: true }), /two-factor/);
+  ok(await ctx.super.client.rpc('set_platform_setting', { p_key: 'require_staff_mfa', p_value: true }), 'enable (aal2)');
+  assert(ok(await anon.rpc('get_public_settings'), 'settings').require_staff_mfa === true, 'published to the app');
+  await denied(ctx.admin.client.rpc('admin_dashboard_stats'));
+  assert(ok(await ctx.admin.client.from('payments').select('id'), 'payments').length === 0, 'aal1 admin reads nothing');
+  await denied(ctx.trainer.client.rpc('trainer_dashboard_stats'));
+  assert(ok(await fresh.from('audit_logs').select('id').limit(1), 'audit').length === 0, 'aal1 super-admin session reads nothing');
+  ok(await ctx.student.client.rpc('get_my_course_map', { p_enrollment_id: ctx.enrollment }), 'students unaffected');
+  const e = ok(await ctx.admin.client.auth.mfa.enroll({ factorType: 'totp', friendlyName: '[TEST] e2e' }), 'enroll admin');
+  ok(await ctx.admin.client.auth.mfa.challengeAndVerify({ factorId: e.id, code: totp(e.totp.secret) }), 'verify admin');
+  ok(await ctx.admin.client.rpc('admin_dashboard_stats'), 'aal2 admin works');
+  ok(await ctx.super.client.rpc('set_platform_setting', { p_key: 'require_staff_mfa', p_value: false }), 'disable');
+  ok(await ctx.trainer.client.rpc('trainer_dashboard_stats'), 'trainer works again');
+});
+
 begin('Cleanup');
-await step('unpublish [TEST] course, disable [TEST] payment method, demote + suspend [TEST] staff', async () => {
-  if (ctx.method) ok(await service.from('payment_methods').update({ is_enabled: false }).eq('id', ctx.method.id), 'disable method');
-  if (ctx.course) ok(await service.from('courses').update({ is_published: false, is_archived: true }).eq('id', ctx.course.id), 'unpublish course');
-  const staff = [ctx.super, ctx.admin, ctx.trainer].filter(Boolean).map((u) => u.id);
+await step('remove [TEST] course, files, invitations, messages and payment method; ban + suspend [TEST] accounts', async () => {
+  const all = [ctx.student, ctx.other, ctx.super, ctx.admin, ctx.trainer, ctx.resendUser].filter(Boolean);
+  const ids = all.map((u) => u.id);
+  if (ctx.course) {
+    ok(await service.from('enrollments').delete().eq('course_id', ctx.course.id), 'enrollments');
+    ok(await service.from('courses').delete().eq('id', ctx.course.id), 'course');
+  }
+  if (ctx.method) ok(await service.from('payment_methods').delete().eq('id', ctx.method.id), 'payment method');
+  ok(await service.from('support_tickets').delete().in('user_id', ids), 'tickets');
+  ok(await service.from('email_outbox').delete().in('user_id', ids), 'outbox');
+  ok(await service.from('staff_invitations').delete().like('email', `%mcsli-e2e-%${RUN}%`), 'invitations');
+  ok(await service.from('contact_messages').delete().like('body', `[TEST] contact ${RUN}%`), 'contact message');
+  for (const [bucket, paths] of [['identity-documents', [ctx.docPath]], ['payment-proofs', [ctx.proofPath]], ['course-media', Object.values(ctx.media ?? {})]]) {
+    const p = paths.filter(Boolean);
+    if (p.length) await service.storage.from(bucket).remove(p);
+  }
+  const staff = [ctx.super, ctx.admin, ctx.trainer, ctx.resendUser].filter(Boolean).map((u) => u.id);
   if (staff.length) ok(await service.from('profiles').update({ role: 'STUDENT', account_status: 'suspended' }).in('id', staff), 'demote staff');
   const left = ok(await service.from('profiles').select('id').in('id', staff).neq('role', 'STUDENT'), 'check');
   assert(left.length === 0, 'no privileged [TEST] accounts remain');
-  // every [TEST] account is banned from signing in again (records stay for inspection)
-  const all = [ctx.student, ctx.other, ctx.super, ctx.admin, ctx.trainer].filter(Boolean);
+  // every [TEST] account is banned from signing in again (audit rows reference them and are immutable)
   for (const u of all) ok(await service.auth.admin.updateUserById(u.id, { ban_duration: '876000h' }), `ban ${u.email}`);
   ok(await service.from('profiles').update({ account_status: 'suspended' }).in('id', all.map((u) => u.id)), 'suspend all');
-  return `${staff.length} [TEST] staff demoted; ${all.length} [TEST] accounts banned + suspended`;
+  return `course, files, invitations, messages removed; ${staff.length} [TEST] staff demoted; ${all.length} [TEST] accounts banned + suspended`;
 });
 
 const failed = results.filter((r) => !r.ok);

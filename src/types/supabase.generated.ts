@@ -58,13 +58,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "assessment_attempts_assessed_by_fkey"
-            columns: ["assessed_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "assessment_attempts_assessment_id_fkey"
             columns: ["assessment_id"]
             isOneToOne: false
@@ -136,13 +129,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "assessments_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "assessments_enrollment_id_fkey"
             columns: ["enrollment_id"]
             isOneToOne: false
@@ -161,13 +147,6 @@ export type Database = {
             columns: ["trainer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assessments_trainer_id_fkey"
-            columns: ["trainer_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -218,24 +197,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "audit_logs_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "audit_logs_target_user_id_fkey"
             columns: ["target_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "audit_logs_target_user_id_fkey"
-            columns: ["target_user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -311,13 +276,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "certificates_issued_by_fkey"
-            columns: ["issued_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "certificates_reissued_from_fkey"
             columns: ["reissued_from"]
             isOneToOne: false
@@ -332,24 +290,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "certificates_revoked_by_fkey"
-            columns: ["revoked_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "certificates_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "certificates_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -556,13 +500,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "courses_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       discussion_posts: {
@@ -608,24 +545,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "discussion_posts_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "discussion_posts_hidden_by_fkey"
             columns: ["hidden_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "discussion_posts_hidden_by_fkey"
-            columns: ["hidden_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -694,24 +617,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "discussion_reports_reporter_id_fkey"
-            columns: ["reporter_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "discussion_reports_resolved_by_fkey"
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "discussion_reports_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -778,13 +687,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "discussion_threads_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "discussion_threads_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
@@ -799,17 +701,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "discussion_threads_hidden_by_fkey"
-            columns: ["hidden_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "discussion_threads_month_id_fkey"
             columns: ["month_id"]
             isOneToOne: false
             referencedRelation: "course_months"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          last_error: string | null
+          payload: Json
+          provider_message_id: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          template: string
+          to_email: string
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          template: string
+          to_email: string
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          template?: string
+          to_email?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_outbox_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -895,24 +849,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "enrollments_final_approved_by_fkey"
-            columns: ["final_approved_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "enrollments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "enrollments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -963,13 +903,6 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1055,13 +988,6 @@ export type Database = {
             columns: ["graded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exam_attempts_graded_by_fkey"
-            columns: ["graded_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1190,13 +1116,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "exams_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "exams_month_id_fkey"
             columns: ["month_id"]
             isOneToOne: false
@@ -1245,20 +1164,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_documents_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_documents_verification_id_fkey"
-            columns: ["verification_id"]
-            isOneToOne: false
-            referencedRelation: "identity_summary"
             referencedColumns: ["id"]
           },
           {
@@ -1334,24 +1239,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "identity_verifications_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "identity_verifications_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_verifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1576,13 +1467,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "month_overrides_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "month_overrides_enrollment_id_fkey"
             columns: ["enrollment_id"]
             isOneToOne: false
@@ -1601,13 +1485,6 @@ export type Database = {
             columns: ["revoked_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "month_overrides_revoked_by_fkey"
-            columns: ["revoked_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1649,13 +1526,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1718,13 +1588,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payment_methods_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1822,24 +1685,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "payments_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "payments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1869,13 +1718,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2169,13 +2011,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "site_content_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       staff_invitations: {
@@ -2233,29 +2068,8 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "staff_invitations_accepted_by_fkey"
-            columns: ["accepted_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "staff_invitations_cancelled_by_fkey"
             columns: ["cancelled_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "staff_invitations_cancelled_by_fkey"
-            columns: ["cancelled_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "staff_invitations_invited_by_fkey"
-            columns: ["invited_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2264,7 +2078,7 @@ export type Database = {
             foreignKeyName: "staff_invitations_invited_by_fkey"
             columns: ["invited_by"]
             isOneToOne: false
-            referencedRelation: "public_profiles"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2300,13 +2114,6 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "support_messages_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -2361,24 +2168,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "support_tickets_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "support_tickets_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "support_tickets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2423,13 +2216,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "trainer_assignments_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "trainer_assignments_cohort_id_fkey"
             columns: ["cohort_id"]
             isOneToOne: false
@@ -2450,83 +2236,10 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "trainer_assignments_trainer_id_fkey"
-            columns: ["trainer_id"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
     Views: {
-      exam_attempts_student: {
-        Row: {
-          answers: Json | null
-          attempt_number: number | null
-          deadline_at: string | null
-          enrollment_id: string | null
-          exam_id: string | null
-          grader_feedback: string | null
-          id: string | null
-          passed: boolean | null
-          question_order: string[] | null
-          results_released_at: string | null
-          started_at: string | null
-          status: Database["public"]["Enums"]["exam_attempt_status"] | null
-          submitted_at: string | null
-          total_score: number | null
-        }
-        Insert: {
-          answers?: Json | null
-          attempt_number?: number | null
-          deadline_at?: string | null
-          enrollment_id?: string | null
-          exam_id?: string | null
-          grader_feedback?: never
-          id?: string | null
-          passed?: never
-          question_order?: string[] | null
-          results_released_at?: string | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["exam_attempt_status"] | null
-          submitted_at?: string | null
-          total_score?: never
-        }
-        Update: {
-          answers?: Json | null
-          attempt_number?: number | null
-          deadline_at?: string | null
-          enrollment_id?: string | null
-          exam_id?: string | null
-          grader_feedback?: never
-          id?: string | null
-          passed?: never
-          question_order?: string[] | null
-          results_released_at?: string | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["exam_attempt_status"] | null
-          submitted_at?: string | null
-          total_score?: never
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exam_attempts_enrollment_id_fkey"
-            columns: ["enrollment_id"]
-            isOneToOne: false
-            referencedRelation: "enrollments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exam_attempts_exam_id_fkey"
-            columns: ["exam_id"]
-            isOneToOne: false
-            referencedRelation: "exams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       exam_questions_student: {
         Row: {
           exam_id: string | null
@@ -2574,101 +2287,6 @@ export type Database = {
           },
         ]
       }
-      identity_summary: {
-        Row: {
-          consent_given_at: string | null
-          doc_type: Database["public"]["Enums"]["identity_doc_type"] | null
-          full_name_on_document: string | null
-          id: string | null
-          id_number_masked: string | null
-          issuing_country: string | null
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: Database["public"]["Enums"]["identity_status"] | null
-          submitted_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          consent_given_at?: string | null
-          doc_type?: Database["public"]["Enums"]["identity_doc_type"] | null
-          full_name_on_document?: string | null
-          id?: string | null
-          id_number_masked?: never
-          issuing_country?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: Database["public"]["Enums"]["identity_status"] | null
-          submitted_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          consent_given_at?: string | null
-          doc_type?: Database["public"]["Enums"]["identity_doc_type"] | null
-          full_name_on_document?: string | null
-          id?: string | null
-          id_number_masked?: never
-          issuing_country?: string | null
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: Database["public"]["Enums"]["identity_status"] | null
-          submitted_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "identity_verifications_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_verifications_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_verifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "identity_verifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "public_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      public_profiles: {
-        Row: {
-          avatar_path: string | null
-          full_name: string | null
-          id: string | null
-          role: Database["public"]["Enums"]["user_role"] | null
-        }
-        Insert: {
-          avatar_path?: string | null
-          full_name?: string | null
-          id?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-        }
-        Update: {
-          avatar_path?: string | null
-          full_name?: string | null
-          id?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-        }
-        Relationships: []
-      }
       quiz_questions_student: {
         Row: {
           id: string | null
@@ -2713,24 +2331,6 @@ export type Database = {
           },
         ]
       }
-      site_content_public: {
-        Row: {
-          key: string | null
-          updated_at: string | null
-          value: Json | null
-        }
-        Insert: {
-          key?: string | null
-          updated_at?: string | null
-          value?: never
-        }
-        Update: {
-          key?: string | null
-          updated_at?: string | null
-          value?: never
-        }
-        Relationships: []
-      }
     }
     Functions: {
       accept_staff_invitation: { Args: { p_token: string }; Returns: Json }
@@ -2744,6 +2344,23 @@ export type Database = {
           submitted_at: string
           user_id: string
           verification_id: string
+        }[]
+      }
+      admin_list_identities: {
+        Args: { p_status?: Database["public"]["Enums"]["identity_status"] }
+        Returns: {
+          consent_given_at: string
+          doc_type: Database["public"]["Enums"]["identity_doc_type"]
+          full_name_on_document: string
+          id: string
+          id_number_masked: string
+          issuing_country: string
+          rejection_reason: string
+          reviewed_at: string
+          reviewed_by: string
+          status: Database["public"]["Enums"]["identity_status"]
+          submitted_at: string
+          user_id: string
         }[]
       }
       admin_reveal_identity_number: {
@@ -2790,6 +2407,40 @@ export type Database = {
       can_moderate_thread: { Args: { p_thread_id: string }; Returns: boolean }
       cancel_staff_invitation: {
         Args: { p_invitation_id: string }
+        Returns: undefined
+      }
+      claim_email_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          last_error: string | null
+          payload: Json
+          provider_message_id: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          template: string
+          to_email: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "email_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_email: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_ok: boolean
+          p_provider_id?: string
+        }
         Returns: undefined
       }
       create_staff_invitation: {
@@ -2880,6 +2531,17 @@ export type Database = {
         Args: { p_enrollment_id: string }
         Returns: undefined
       }
+      fn_queue_email: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_payload: Json
+          p_subject: string
+          p_template: string
+          p_user: string
+        }
+        Returns: undefined
+      }
       fn_student_can_access_lesson: {
         Args: { p_lesson_id: string }
         Returns: boolean
@@ -2901,7 +2563,32 @@ export type Database = {
         Returns: string[]
       }
       get_my_course_map: { Args: { p_enrollment_id: string }; Returns: Json }
+      get_my_identity: {
+        Args: never
+        Returns: {
+          consent_given_at: string
+          doc_type: Database["public"]["Enums"]["identity_doc_type"]
+          full_name_on_document: string
+          id: string
+          id_number_masked: string
+          issuing_country: string
+          rejection_reason: string
+          reviewed_at: string
+          reviewed_by: string
+          status: Database["public"]["Enums"]["identity_status"]
+          submitted_at: string
+          user_id: string
+        }[]
+      }
       get_public_settings: { Args: never; Returns: Json }
+      get_site_content_public: {
+        Args: never
+        Returns: {
+          key: string
+          updated_at: string
+          value: Json
+        }[]
+      }
       grade_exam_attempt: {
         Args: {
           p_attempt_id: string
@@ -2954,11 +2641,39 @@ export type Database = {
         }
         Returns: undefined
       }
+      my_exam_attempts: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          answers: Json
+          attempt_number: number
+          deadline_at: string
+          enrollment_id: string
+          exam_id: string
+          grader_feedback: string
+          id: string
+          passed: boolean
+          question_order: string[]
+          results_released_at: string
+          started_at: string
+          status: Database["public"]["Enums"]["exam_attempt_status"]
+          submitted_at: string
+          total_score: number
+        }[]
+      }
       override_month_unlock: {
         Args: { p_enrollment_id: string; p_month_id: string; p_reason: string }
         Returns: string
       }
       owns_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
+      public_profiles_lookup: {
+        Args: { p_ids: string[] }
+        Returns: {
+          avatar_path: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+        }[]
+      }
       record_assessment_result: {
         Args: {
           p_assessment_id: string

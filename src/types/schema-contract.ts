@@ -17,6 +17,9 @@ type Tables = Database['public']['Tables'];
 type Views = Database['public']['Views'];
 type Row<T extends keyof Tables> = Tables[T]['Row'];
 type ViewRow<T extends keyof Views> = Views[T]['Row'];
+type Fns = Database['public']['Functions'];
+/** Row shape of a set-returning RPC (the SECURITY DEFINER functions that replaced the definer views). */
+type FnRow<T extends keyof Fns> = Fns[T]['Returns'] extends (infer R)[] ? R : never;
 
 /**
  * `true` when every column of the manual type exists in the schema row. Manual types may be a
@@ -26,8 +29,8 @@ type KeysExist<Manual, Generated, Joins extends PropertyKey = never> = [Exclude<
 
 export const schemaContract: {
   profiles: KeysExist<M.Profile, Row<'profiles'>>;
-  public_profiles: KeysExist<M.PublicProfile, ViewRow<'public_profiles'>>;
-  identity_summary: KeysExist<M.IdentitySummary, ViewRow<'identity_summary'>>;
+  public_profiles: KeysExist<M.PublicProfile, FnRow<'public_profiles_lookup'>>;
+  identity_summary: KeysExist<M.IdentitySummary, FnRow<'get_my_identity'>>;
   identity_documents: KeysExist<M.IdentityDocument, Row<'identity_documents'>>;
   courses: KeysExist<M.Course, Row<'courses'>>;
   cohorts: KeysExist<M.Cohort, Row<'cohorts'>>;
@@ -51,7 +54,7 @@ export const schemaContract: {
   exams: KeysExist<M.Exam, Row<'exams'>>;
   exam_questions_student: KeysExist<M.ExamQuestionStudent, ViewRow<'exam_questions_student'>>;
   exam_questions: KeysExist<M.ExamQuestion, Row<'exam_questions'>>;
-  exam_attempts_student: KeysExist<M.ExamAttemptStudent, ViewRow<'exam_attempts_student'>>;
+  exam_attempts_student: KeysExist<M.ExamAttemptStudent, FnRow<'my_exam_attempts'>>;
   exam_attempts: KeysExist<M.ExamAttempt, Row<'exam_attempts'>>;
   discussion_threads: KeysExist<M.DiscussionThread, Row<'discussion_threads'>, 'author' | 'posts'>;
   discussion_posts: KeysExist<M.DiscussionPost, Row<'discussion_posts'>, 'author'>;
@@ -119,4 +122,6 @@ export const rpcContract: Fn[] = [
   'moderate_discussion', 'update_ticket_status', 'mark_notifications_read', 'set_site_content', 'set_platform_setting',
   'admin_set_user_role', 'admin_set_account_status', 'admin_set_enrollment_status', 'admin_dashboard_stats', 'trainer_dashboard_stats',
   'staff_quiz_questions', 'staff_exam_questions', 'staff_exam_attempts', 'get_public_settings',
+  'get_site_content_public', 'get_my_identity', 'admin_list_identities', 'my_exam_attempts', 'public_profiles_lookup',
+  'create_staff_invitation', 'cancel_staff_invitation', 'list_staff_invitations', 'accept_staff_invitation', 'get_course_publish_problems',
 ];

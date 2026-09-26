@@ -1,11 +1,24 @@
 import { getSupabase } from '@/lib/supabase';
-import type { DiscussionPost, DiscussionThread, Notification, SupportMessage, SupportTicket } from '@/types/database';
+import type { DiscussionPost, DiscussionThread, Notification, PublicProfile, SupportMessage, SupportTicket } from '@/types/database';
 import type { TicketCategory, TicketStatus } from '@/domain/types';
 
 const sb = () => getSupabase();
 function must<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw res.error;
   return res.data as T;
+}
+
+/**
+ * Attach name/role/avatar of the people referenced by `idField` as `as`. Goes through
+ * public_profiles_lookup(), a SECURITY DEFINER function that only returns people the caller may
+ * see (self, staff, classmates, managed students) – never other profile columns.
+ */
+async function attachProfiles<T extends object>(rows: T[], idField: keyof T, as: string): Promise<T[]> {
+  const ids = [...new Set(rows.map((r) => r[idField]).filter((v): v is T[keyof T] & string => typeof v === 'string'))];
+  if (!ids.length) return rows;
+  const profiles = (must(await sb().rpc('public_profiles_lookup', { p_ids: ids })) as PublicProfile[] | null) ?? [];
+  const byId = new Map(profiles.map((p) => [p.id, p]));
+  return rows.map((r) => ({ ...r, [as]: byId.get(r[idField] as unknown as string) ?? null }));
 }
 
 // ---------------------------------------------------------------------------
@@ -27,17 +40,18 @@ export async function markNotificationsRead(ids?: string[]): Promise<number> {
 // Discussions
 // ---------------------------------------------------------------------------
 export async function listThreads(courseId: string, monthId?: string | null): Promise<DiscussionThread[]> {
-  let q = sb().from('discussion_threads').select('*, author:public_profiles!discussion_threads_author_id_fkey(id, full_name, role, avatar_path), posts:discussion_posts(count)').eq('course_id', courseId).order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
+  let q = sb().from('discussion_threads').select('*, posts:discussion_posts(count)').eq('course_id', courseId).order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
   if (monthId) q = q.eq('month_id', monthId);
-  return must(await q) as DiscussionThread[];
+  return attachProfiles(must(await q) as DiscussionThread[], 'author_id', 'author');
 }
 
 export async function getThread(threadId: string): Promise<DiscussionThread | null> {
-  return must(await sb().from('discussion_threads').select('*, author:public_profiles!discussion_threads_author_id_fkey(id, full_name, role, avatar_path)').eq('id', threadId).maybeSingle()) as DiscussionThread | null;
+  const t = must(await sb().from('discussion_threads').select('*').eq('id', threadId).maybeSingle()) as DiscussionThread | null;
+  return t ? (await attachProfiles([t], 'author_id', 'author'))[0]! : null;
 }
 
 export async function listPosts(threadId: string): Promise<DiscussionPost[]> {
-  return must(await sb().from('discussion_posts').select('*, author:public_profiles!discussion_posts_author_id_fkey(id, full_name, role, avatar_path)').eq('thread_id', threadId).order('created_at')) as DiscussionPost[];
+  return attachProfiles(must(await sb().from('discussion_posts').select('*').eq('thread_id', threadId).order('created_at')) as DiscussionPost[], 'author_id', 'author');
 }
 
 export async function createThread(input: { courseId: string; monthId?: string | null; authorId: string; title: string; body: string; isAnnouncement?: boolean; isPinned?: boolean }): Promise<string> {
@@ -65,15 +79,16 @@ export async function moderate(input: { threadId?: string; postId?: string; hidd
 // Support
 // ---------------------------------------------------------------------------
 export async function listTickets(opts: { all?: boolean; status?: TicketStatus } = {}): Promise<SupportTicket[]> {
-  let q = sb().from('support_tickets').select('*, user:public_profiles!support_tickets_user_id_fkey(id, full_name, role, avatar_path)').order('updated_at', { ascending: false });
+  let q = sb().from('support_tickets').select('*').order('updated_at', { ascending: false });
   if (opts.status) q = q.eq('status', opts.status);
-  return must(await q) as SupportTicket[];
+  return attachProfiles(must(await q) as SupportTicket[], 'user_id', 'user');
 }
 export async function getTicket(id: string): Promise<SupportTicket | null> {
-  return must(await sb().from('support_tickets').select('*, user:public_profiles!support_tickets_user_id_fkey(id, full_name, role, avatar_path)').eq('id', id).maybeSingle()) as SupportTicket | null;
+  const t = must(await sb().from('support_tickets').select('*').eq('id', id).maybeSingle()) as SupportTicket | null;
+  return t ? (await attachProfiles([t], 'user_id', 'user'))[0]! : null;
 }
 export async function listTicketMessages(ticketId: string): Promise<SupportMessage[]> {
-  return must(await sb().from('support_messages').select('*, author:public_profiles!support_messages_author_id_fkey(id, full_name, role, avatar_path)').eq('ticket_id', ticketId).order('created_at')) as SupportMessage[];
+  return attachProfiles(must(await sb().from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at')) as SupportMessage[], 'author_id', 'author');
 }
 export async function createTicket(input: { userId: string; category: TicketCategory; subject: string; body: string }): Promise<string> {
   const t = must(await sb().from('support_tickets').insert({ user_id: input.userId, category: input.category, subject: input.subject.trim() }).select('id').single()) as { id: string };

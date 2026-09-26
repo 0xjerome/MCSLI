@@ -299,12 +299,12 @@ describe('identity verification', () => {
     expect(raw.id_number_hash).toMatch(/^[0-9a-f]{64}$/);
     const cols = (await client.query(`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'identity_verifications'`)).rows.map((r) => r.column_name);
     expect(cols).not.toContain('id_number');
-    const summary = await asUser(client, ugStudent, async (q) => (await q(`select id_number_masked, status from public.identity_summary`)).rows);
+    const summary = await asUser(client, ugStudent, async (q) => (await q(`select id_number_masked, status from public.get_my_identity()`)).rows);
     expect(summary).toHaveLength(1);
     expect(summary[0].id_number_masked).toBe('••••••••••ABCD');
     expect(summary[0].status).toBe('pending');
     // other student sees nothing
-    const other = await asUser(client, intlStudent, async (q) => (await q(`select * from public.identity_summary`)).rows);
+    const other = await asUser(client, intlStudent, async (q) => (await q(`select * from public.get_my_identity()`)).rows);
     expect(other).toHaveLength(0);
     // trainer cannot reveal; admin can and it is audited
     const vid = (await client.query(`select id from public.identity_verifications where user_id = $1`, [ugStudent.id])).rows[0].id;
@@ -329,7 +329,7 @@ describe('identity verification', () => {
     const docsTrainer = await asUser(client, trainer, async (q) => (await q(`select * from public.identity_documents`)).rows);
     expect(docsTrainer).toHaveLength(0);
     await asUser(client, admin, (q) => q(`select public.review_identity($1, 'verified')`, [vid]));
-    const st = await asUser(client, ugStudent, async (q) => (await q(`select status from public.identity_summary`)).rows[0].status);
+    const st = await asUser(client, ugStudent, async (q) => (await q(`select status from public.get_my_identity()`)).rows[0].status);
     expect(st).toBe('verified');
   });
 });
@@ -380,7 +380,7 @@ describe('examinations and certificates', () => {
     expect(sub.needs_manual_grading).toBe(true);
     expect(Number(sub.auto_points)).toBe(4);
     // student cannot see a score before release
-    const mine = await asUser(client, fullStudent, async (q) => (await q(`select total_score, passed, status from public.exam_attempts_student where id = $1`, [start.attempt_id])).rows[0]);
+    const mine = await asUser(client, fullStudent, async (q) => (await q(`select total_score, passed, status from public.my_exam_attempts($1) where id = $2`, [enrollmentId, start.attempt_id])).rows[0]);
     expect(mine.status).toBe('submitted');
     expect(mine.total_score).toBeNull();
     const denied = await expectDenied(asUser(client, fullStudent, (q) => q(`select total_score from public.exam_attempts`)));
@@ -391,7 +391,7 @@ describe('examinations and certificates', () => {
     expect(Number(graded.total_score)).toBe(90);
     expect(graded.passed).toBe(true);
     await asUser(client, admin, (q) => q(`select public.release_exam_results($1)`, [DEMO.finalExam]));
-    const released = await asUser(client, fullStudent, async (q) => (await q(`select total_score, passed from public.exam_attempts_student where id = $1`, [start.attempt_id])).rows[0]);
+    const released = await asUser(client, fullStudent, async (q) => (await q(`select total_score, passed from public.my_exam_attempts($1) where id = $2`, [enrollmentId, start.attempt_id])).rows[0]);
     expect(Number(released.total_score)).toBe(90);
     expect(released.passed).toBe(true);
   });
@@ -425,8 +425,8 @@ describe('examinations and certificates', () => {
     const nf = await asUser(client, null, async (q) => (await q(`select public.verify_certificate('MCSLI-2000-ZZZZZZ') as v`)).rows[0].v);
     expect(nf).toEqual({ found: false });
     // anon cannot read the certificates table
-    const anonRows = await asUser(client, null, async (q) => (await q(`select * from public.certificates`)).rows);
-    expect(anonRows).toHaveLength(0);
+    // anon has no privilege on the certificates table at all (verification only through the RPC)
+    expect(await expectDenied(asUser(client, null, (q) => q(`select * from public.certificates`)))).toMatch(/permission denied/);
     // revoke + reissue
     await asUser(client, admin, (q) => q(`select public.revoke_certificate($1, 'Name misspelled')`, [certId]));
     expect((await asUser(client, null, async (q) => (await q(`select public.verify_certificate($1) as v`, [cert.certificate_number])).rows[0].v)).status).toBe('revoked');
@@ -486,10 +486,11 @@ describe('discussions, support, notifications', () => {
     ] })]));
     await asUser(client, admin, (q) => q(`select public.set_site_content('contact', '{"email":"info@mcsli.org"}'::jsonb)`));
     // the raw row (with unverified figures) is not publicly readable…
-    const raw = await asUser(client, null, async (q) => (await q(`select value from public.site_content where key = 'impact_stats'`)).rows);
-    expect(raw).toHaveLength(0);
+    expect(await expectDenied(asUser(client, null, (q) => q(`select value from public.site_content where key = 'impact_stats'`)))).toMatch(/permission denied/);
+    // signed-in users still cannot read the raw impact_stats row (RLS)
+    expect(await asUser(client, ugStudent, async (q) => (await q(`select value from public.site_content where key = 'impact_stats'`)).rows)).toHaveLength(0);
     // …the public view carries only verified statistics
-    const pub = await asUser(client, null, async (q) => (await q(`select key, value from public.site_content_public`)).rows);
+    const pub = await asUser(client, null, async (q) => (await q(`select key, value from public.get_site_content_public()`)).rows);
     const impact = pub.find((r) => r.key === 'impact_stats')!.value;
     expect(impact.stats).toEqual([{ label: 'People trained', value: '150', verified: true }]);
     expect(pub.find((r) => r.key === 'contact')!.value.email).toBe('info@mcsli.org');
