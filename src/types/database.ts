@@ -287,6 +287,13 @@ export interface LessonProgress {
   updated_at: string;
 }
 
+export type QuizRevealPolicy = 'after_pass_or_final' | 'always' | 'never';
+/** Selection rules every attempt must satisfy: `{ topics: { Alphabet: 3 }, difficulty: { easy: 2 } }` (quotas, not totals). */
+export interface QuizBlueprint {
+  topics?: Record<string, number>;
+  difficulty?: Partial<Record<QuestionDifficulty, number>>;
+}
+
 export interface Quiz {
   id: string;
   month_id: string;
@@ -297,6 +304,14 @@ export interface Quiz {
   max_attempts: number | null;
   is_required: boolean;
   is_published: boolean;
+  /** null = every approved question (fixed quiz); otherwise the server picks this many per attempt. */
+  questions_per_attempt: number | null;
+  randomize_questions: boolean;
+  randomize_options: boolean;
+  avoid_recent_questions: boolean;
+  blueprint: QuizBlueprint;
+  reveal_policy: QuizRevealPolicy;
+  version: number;
 }
 
 export interface McOption {
@@ -308,7 +323,35 @@ export interface MatchingOptions {
   right: McOption[];
 }
 
-export interface QuizQuestionStudent {
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+export type QuestionStatus = 'draft' | 'approved' | 'rejected' | 'retired';
+export type QuestionSource = 'instructor' | 'ai_draft' | 'imported';
+
+/** One question as a student sees it inside their own attempt (a snapshot row – never the bank row). */
+export interface AttemptQuestion {
+  id: string;
+  position: number;
+  question_type: QuestionType;
+  prompt: string;
+  video_path: string | null;
+  video_url: string | null;
+  /** Already in the order shown to this student; option ids are stable. */
+  options: McOption[] | MatchingOptions;
+  points: number;
+  topic: string | null;
+}
+
+export interface AttemptQuestionResult extends AttemptQuestion {
+  your_answer: Json | null;
+  /** null while the attempt is in progress. */
+  correct: boolean | null;
+  /** null unless answers_revealed. */
+  correct_answer: Json | null;
+  explanation: string | null;
+}
+
+/** Bank row (staff only). */
+export interface QuizQuestion {
   id: string;
   quiz_id: string;
   position: number;
@@ -318,12 +361,27 @@ export interface QuizQuestionStudent {
   video_url: string | null;
   options: McOption[] | MatchingOptions;
   points: number;
-}
-
-export interface QuizQuestion extends QuizQuestionStudent {
   correct_answer: Json;
   explanation: string | null;
+  topic: string | null;
+  difficulty: QuestionDifficulty;
+  status: QuestionStatus;
+  source: QuestionSource;
+  learning_objective: string | null;
+  lesson_id: string | null;
+  practice_item_id: string | null;
+  allow_practice: boolean;
+  version: number;
+  generation_id: string | null;
+  review_note: string | null;
+  created_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
+
+export type QuizAttemptStatus = 'in_progress' | 'submitted';
 
 export interface QuizAttempt {
   id: string;
@@ -331,21 +389,120 @@ export interface QuizAttempt {
   enrollment_id: string;
   attempt_number: number;
   answers: Record<string, Json>;
-  score: number;
-  passed: boolean;
+  score: number | null;
+  passed: boolean | null;
   started_at: string;
-  submitted_at: string;
+  submitted_at: string | null;
+  status: QuizAttemptStatus;
+  quiz_version: number | null;
+  total_points: number | null;
+  earned_points: number | null;
+  bank_snapshot_at: string | null;
+}
+
+export interface QuizAttemptStart {
+  attempt_id: string;
+  attempt_number: number;
+  status: QuizAttemptStatus;
+  /** True when an in-progress attempt was returned instead of a new one (refresh, retry, second tab). */
+  resumed: boolean;
+  started_at: string;
+  questions: AttemptQuestion[];
+  answers: Record<string, Json>;
+  total_points: number | null;
 }
 
 export interface QuizResult {
   attempt_id: string;
+  quiz_id: string;
   attempt_number: number;
-  score: number;
-  passed: boolean;
+  status: QuizAttemptStatus;
+  started_at: string;
+  submitted_at: string | null;
+  score: number | null;
+  passed: boolean | null;
   passing_score: number;
+  total_points: number | null;
+  earned_points: number | null;
   /** False while retries remain on a failed attempt: correct_answer/explanation are then null. */
   answers_revealed: boolean;
-  questions: { question_id: string; correct: boolean; correct_answer: Json; explanation: string | null; your_answer: Json }[];
+  attempts_used: number;
+  max_attempts: number | null;
+  answers: Record<string, Json>;
+  questions: AttemptQuestionResult[];
+}
+
+/** Practice mode (low stakes: immediate feedback, no effect on grades or progression). */
+export interface PracticeQuestion {
+  id: string;
+  question_type: QuestionType;
+  prompt: string;
+  video_path: string | null;
+  video_url: string | null;
+  options: McOption[] | MatchingOptions;
+  points: number;
+  topic: string | null;
+  difficulty: QuestionDifficulty;
+}
+export interface PracticeFeedback {
+  correct: boolean;
+  correct_answer: Json;
+  explanation: string | null;
+}
+export interface TopicProgress {
+  topic: string;
+  quiz_answered: number;
+  quiz_correct: number;
+  practice_answered: number;
+  practice_correct: number;
+  accuracy: number;
+}
+
+/** Staff analytics. Flags are hints for review – nothing is ever removed automatically. */
+export interface QuestionStats {
+  question_id: string;
+  times_used: number;
+  answered: number;
+  correct_count: number;
+  correct_pct: number;
+  last_used: string | null;
+  flag: 'too_easy' | 'too_hard' | null;
+}
+export interface QuizStats {
+  attempts: number;
+  in_progress: number;
+  students: number;
+  pass_rate: number;
+  students_passed: number;
+  avg_score: number | null;
+  avg_attempts_per_student: number | null;
+  topics: { topic: string; answered: number; correct_pct: number }[];
+  bank: { approved: number; draft: number; retired: number; rejected: number; ai_draft: number };
+}
+export interface QuizAttemptDetail {
+  attempt: Omit<QuizAttempt, 'answers'>;
+  questions: (AttemptQuestion & { question_id: string | null; question_version: number; difficulty: string | null; answer: Json | null; is_correct: boolean | null; correct_answer: Json; explanation: string | null })[];
+}
+export interface QuizSelectionPreview {
+  questions: (Pick<QuizQuestion, 'id' | 'question_type' | 'prompt' | 'topic' | 'difficulty' | 'points' | 'options' | 'correct_answer'> & { position: number })[];
+  problems: string[];
+}
+export type QuizGenerationStatus = 'requested' | 'completed' | 'failed' | 'not_configured' | 'insufficient_material';
+export interface QuizGenerationRun {
+  id: string;
+  quiz_id: string;
+  requested_by: string;
+  requested_count: number;
+  difficulty_mix: Partial<Record<QuestionDifficulty, number>>;
+  source_lesson_ids: string[];
+  source_practice_ids: string[];
+  provider: string | null;
+  model: string | null;
+  status: QuizGenerationStatus;
+  generated_count: number;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export interface Assessment {

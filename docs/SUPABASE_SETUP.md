@@ -51,6 +51,8 @@ supabase/
 | `0014_transactional_email_outbox` | `email_outbox` + payment e-mail triggers + pg_cron → `email-dispatch` |
 | `0015_pg_net_schema` | pg_net moved to the `extensions` schema (advisor lint) |
 | `0016_advisor_views_and_anon_surface` | definer views → checked SECURITY DEFINER functions; anon table privileges cut to the public catalogue; helper predicates no longer anon RPCs; identity table explicitly closed; 24 h invitations + 60 s per-address throttle |
+| `20260926111410_ai_training_foundation` | AI-training asset registry (consent/rights/quality gated), annotations, model versions |
+| `20260927090000_quiz_question_banks` | randomized quiz question banks: question metadata, status (draft/approved/retired/rejected) and versioning, quiz blueprints + publish checklist trigger, server-side selection, permanent attempt snapshots (`quiz_attempt_questions`), autosave, practice mode (`practice_events`), review/preview/analytics/import RPCs, AI draft runs (`quiz_generation_runs`); the `quiz_questions_student` view is dropped – students only ever see questions inside their own attempt. See `QUIZ_QUESTION_BANKS.md` |
 
 Database objects after `0012` (identical on the local stack and the hosted project): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,

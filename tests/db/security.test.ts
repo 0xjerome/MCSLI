@@ -182,7 +182,7 @@ describe('assessments, locked content and certificates', () => {
     expect(await rows(alice, `select id from public.quizzes where month_id = $1`, [DEMO.month2])).toHaveLength(0);
     expect(await rows(alice, `select id from public.practice_items where month_id = $1`, [DEMO.month2])).toHaveLength(0);
     expect(await expectDenied(rows(alice, `select public.save_lesson_progress($1, 1, true)`, [DEMO.lesson21]))).toMatch(/locked/);
-    expect(await expectDenied(rows(alice, `select public.submit_quiz_attempt('55555555-5555-5555-5555-555555555502', '{}'::jsonb)`))).toMatch(/locked/);
+    expect(await expectDenied(rows(alice, `select public.start_quiz_attempt('55555555-5555-5555-5555-555555555502')`))).toMatch(/locked/);
   });
 
   it("exam questions of an exam are only readable by students who started that exam", async () => {

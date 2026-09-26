@@ -141,6 +141,7 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0012_advisor_fixes.sql` | Supabase security-advisor follow-ups (pinned search_path, no EXECUTE on trigger functions) |
 | `0013_staff_invitations_and_launch_safety.sql` | staff invitations, optional staff MFA enforcement, publish validation, delete protection |
 | `0014_transactional_email_outbox.sql` | payment e-mail queue + dispatcher schedule |
+| `20260927090000_quiz_question_banks.sql` | randomized quiz question banks: question metadata/status/versioning, quiz blueprints, server-side selection, permanent attempt snapshots, autosave, practice mode, review/analytics/import RPCs, AI draft runs (see `docs/QUIZ_QUESTION_BANKS.md`) |
 | `0015_pg_net_schema.sql` | pg_net moved to `extensions` |
 | `0016_advisor_views_and_anon_surface.sql` | definer views → checked functions; anonymous surface reduced to the public catalogue |
 
@@ -252,7 +253,7 @@ Month N is accessible  ⇔
   student and is written to `audit_logs` with actor, student, course/month, reason and time.
 * Lessons, modules, quizzes, practice items and course media are **unreadable** (RLS) while their
   month is locked, so changing a URL cannot reveal content; `save_lesson_progress()` and
-  `submit_quiz_attempt()` re-check access.
+  `start_quiz_attempt()` re-check access.
 
 The UI always shows *why* something is locked (`LockedCard`) with the relevant next action.
 
@@ -270,8 +271,15 @@ autosave every 10 s, resume after disconnect, auto-submit when time runs out. Mu
 video and matching questions are auto-graded; practical questions are graded by a trainer
 (`grade_exam_attempt`). Scores are hidden from students until `release_exam_results()`.
 
-**Quizzes**: scored server-side; correct answers are never sent to the browser before an attempt
-(column grants + the `quiz_questions_student` view).
+**Quizzes**: every student draws their own question set from an approved question bank. The server
+selects the questions (blueprint quotas for topics/difficulty, retakes prefer unseen questions),
+shuffles questions and options, and stores a permanent snapshot per attempt (`start_quiz_attempt`);
+answers are autosaved and graded against the snapshot (`submit_quiz_attempt`). The bank itself is
+never readable by students – questions reach the browser only inside the student's own attempt, and
+correct answers only when the quiz's reveal policy allows it. Only `approved` questions are ever
+selected; AI-generated and imported questions are always drafts until a person approves them.
+Practice mode gives instant feedback without touching grades or progression. Details:
+`docs/QUIZ_QUESTION_BANKS.md`.
 
 ## Certificates
 
@@ -366,13 +374,21 @@ What is covered:
   escalation blocked, exam lifecycle with hidden scores and release, certificate issue / verify /
   revoke / reissue, discussion permissions and moderation, support tickets, notifications,
   site-content permissions, dashboards.
+* `tests/db/quiz-banks.test.ts` – randomized question banks: publish checklist and blueprint
+  validation, per-student selection that satisfies the blueprint, refresh returns the same attempt,
+  autosave, option shuffling with stable grading, tamper-proof payloads, retakes prefer unseen
+  questions, small-pool fallback, instructor preview, drafts/retired/rejected never served, edits
+  after start do not change attempts, shrinking pools block starts, concurrent starts, guessed ids,
+  suspended/locked students, progression gating, practice mode, import/review/AI-run workflow and
+  analytics permissions.
 * `tests/db/security.test.ts` – negative security tests: forged notifications/audit rows,
   cross-student reads, self-promotion, suspended/demoted staff, payment self-confirmation, fee
   tampering, assessment tampering, locked content via direct calls, exam question leakage, expired
   exam reopening, certificate self-issue, identity storage bypass (IDOR), moderation bypass,
   notification rewriting, audit log immutability, admin settings, verification rate limiting.
-* `scripts/e2e-supabase.mjs` – 43 steps: registration → e-mail confirmation → identity → admin
-  verification → enrollment → payments → month 1 → lesson → quiz → failed assessment →
+* `scripts/e2e-supabase.mjs` – 55 steps: registration → e-mail confirmation → identity → admin
+  verification → enrollment → payments → month 1 → lesson → quiz (start/resume/autosave/submit)
+  → question bank review, practice mode and the AI "not configured" path → failed assessment →
   reassessment → month 2 lock/unlock with installment 2 → exam → grading → certificate issue /
   verify / revoke / reissue, support, discussions, notifications, and cross-user attacks.
 * `src/**/*.test.tsx` – registration wizard validation and payload, login errors and redirect,

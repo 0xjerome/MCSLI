@@ -9,6 +9,222 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ai_model_versions: {
+        Row: {
+          approved_by: string | null
+          artifact_uri: string | null
+          created_at: string
+          created_by: string | null
+          dataset_snapshot_at: string | null
+          id: string
+          metrics: Json
+          name: string
+          notes: string | null
+          status: string
+          task: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          approved_by?: string | null
+          artifact_uri?: string | null
+          created_at?: string
+          created_by?: string | null
+          dataset_snapshot_at?: string | null
+          id?: string
+          metrics?: Json
+          name: string
+          notes?: string | null
+          status?: string
+          task: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          approved_by?: string | null
+          artifact_uri?: string | null
+          created_at?: string
+          created_by?: string | null
+          dataset_snapshot_at?: string | null
+          id?: string
+          metrics?: Json
+          name?: string
+          notes?: string | null
+          status?: string
+          task?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_model_versions_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_model_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_training_annotations: {
+        Row: {
+          annotation_type: string
+          asset_id: string
+          created_at: string
+          created_by: string | null
+          end_ms: number | null
+          id: string
+          reviewed_by: string | null
+          start_ms: number | null
+          status: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          annotation_type: string
+          asset_id: string
+          created_at?: string
+          created_by?: string | null
+          end_ms?: number | null
+          id?: string
+          reviewed_by?: string | null
+          start_ms?: number | null
+          status?: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          annotation_type?: string
+          asset_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_ms?: number | null
+          id?: string
+          reviewed_by?: string | null
+          start_ms?: number | null
+          status?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_annotations_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "ai_training_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_annotations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_annotations_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_training_assets: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          lesson_id: string | null
+          media_ref: string
+          notes: string | null
+          practice_item_id: string | null
+          quality_status: string
+          reviewed_by: string | null
+          sign_language: string
+          signer_consent_confirmed: boolean
+          source_kind: string
+          training_approved: boolean
+          training_rights_confirmed: boolean
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          lesson_id?: string | null
+          media_ref: string
+          notes?: string | null
+          practice_item_id?: string | null
+          quality_status?: string
+          reviewed_by?: string | null
+          sign_language?: string
+          signer_consent_confirmed?: boolean
+          source_kind: string
+          training_approved?: boolean
+          training_rights_confirmed?: boolean
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          lesson_id?: string | null
+          media_ref?: string
+          notes?: string | null
+          practice_item_id?: string | null
+          quality_status?: string
+          reviewed_by?: string | null
+          sign_language?: string
+          signer_consent_confirmed?: boolean
+          source_kind?: string
+          training_approved?: boolean
+          training_rights_confirmed?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_assets_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_assets_practice_item_id_fkey"
+            columns: ["practice_item_id"]
+            isOneToOne: false
+            referencedRelation: "practice_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_assets_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assessment_attempts: {
         Row: {
           assessed_at: string
@@ -1722,6 +1938,51 @@ export type Database = {
           },
         ]
       }
+      practice_events: {
+        Row: {
+          created_at: string
+          difficulty: string | null
+          enrollment_id: string
+          id: string
+          is_correct: boolean
+          question_id: string | null
+          topic: string | null
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: string | null
+          enrollment_id: string
+          id?: string
+          is_correct: boolean
+          question_id?: string | null
+          topic?: string | null
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string | null
+          enrollment_id?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_events_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_events_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       practice_items: {
         Row: {
           created_at: string
@@ -1823,39 +2084,132 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_attempt_questions: {
+        Row: {
+          answer: Json | null
+          attempt_id: string
+          correct_answer: Json
+          difficulty: string | null
+          explanation: string | null
+          id: string
+          is_correct: boolean | null
+          options: Json
+          points: number
+          position: number
+          prompt: string
+          question_id: string | null
+          question_type: Database["public"]["Enums"]["question_type"]
+          question_version: number
+          topic: string | null
+          video_path: string | null
+          video_url: string | null
+        }
+        Insert: {
+          answer?: Json | null
+          attempt_id: string
+          correct_answer: Json
+          difficulty?: string | null
+          explanation?: string | null
+          id?: string
+          is_correct?: boolean | null
+          options: Json
+          points: number
+          position: number
+          prompt: string
+          question_id?: string | null
+          question_type: Database["public"]["Enums"]["question_type"]
+          question_version?: number
+          topic?: string | null
+          video_path?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          answer?: Json | null
+          attempt_id?: string
+          correct_answer?: Json
+          difficulty?: string | null
+          explanation?: string | null
+          id?: string
+          is_correct?: boolean | null
+          options?: Json
+          points?: number
+          position?: number
+          prompt?: string
+          question_id?: string | null
+          question_type?: Database["public"]["Enums"]["question_type"]
+          question_version?: number
+          topic?: string | null
+          video_path?: string | null
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempt_questions_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_attempt_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_attempts: {
         Row: {
           answers: Json
           attempt_number: number
+          bank_snapshot_at: string | null
+          earned_points: number | null
           enrollment_id: string
           id: string
-          passed: boolean
+          passed: boolean | null
           quiz_id: string
-          score: number
+          quiz_version: number | null
+          score: number | null
           started_at: string
-          submitted_at: string
+          status: string
+          submitted_at: string | null
+          total_points: number | null
+          updated_at: string
         }
         Insert: {
           answers: Json
           attempt_number: number
+          bank_snapshot_at?: string | null
+          earned_points?: number | null
           enrollment_id: string
           id?: string
-          passed: boolean
+          passed?: boolean | null
           quiz_id: string
-          score: number
+          quiz_version?: number | null
+          score?: number | null
           started_at?: string
-          submitted_at?: string
+          status?: string
+          submitted_at?: string | null
+          total_points?: number | null
+          updated_at?: string
         }
         Update: {
           answers?: Json
           attempt_number?: number
+          bank_snapshot_at?: string | null
+          earned_points?: number | null
           enrollment_id?: string
           id?: string
-          passed?: boolean
+          passed?: boolean | null
           quiz_id?: string
-          score?: number
+          quiz_version?: number | null
+          score?: number | null
           started_at?: string
-          submitted_at?: string
+          status?: string
+          submitted_at?: string | null
+          total_points?: number | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1874,50 +2228,182 @@ export type Database = {
           },
         ]
       }
+      quiz_generation_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          difficulty_mix: Json
+          error: string | null
+          generated_count: number
+          id: string
+          model: string | null
+          provider: string | null
+          quiz_id: string
+          requested_by: string
+          requested_count: number
+          source_lesson_ids: string[]
+          source_practice_ids: string[]
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          difficulty_mix?: Json
+          error?: string | null
+          generated_count?: number
+          id?: string
+          model?: string | null
+          provider?: string | null
+          quiz_id: string
+          requested_by: string
+          requested_count: number
+          source_lesson_ids?: string[]
+          source_practice_ids?: string[]
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          difficulty_mix?: Json
+          error?: string | null
+          generated_count?: number
+          id?: string
+          model?: string | null
+          provider?: string | null
+          quiz_id?: string
+          requested_by?: string
+          requested_count?: number
+          source_lesson_ids?: string[]
+          source_practice_ids?: string[]
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_generation_runs_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_generation_runs_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_questions: {
         Row: {
+          allow_practice: boolean
           correct_answer: Json
           created_at: string
+          created_by: string | null
+          difficulty: string
           explanation: string | null
+          generation_id: string | null
           id: string
+          learning_objective: string | null
+          lesson_id: string | null
           options: Json
           points: number
           position: number
+          practice_item_id: string | null
           prompt: string
           question_type: Database["public"]["Enums"]["question_type"]
           quiz_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          status: string
+          topic: string | null
+          updated_at: string
+          version: number
           video_path: string | null
           video_url: string | null
         }
         Insert: {
+          allow_practice?: boolean
           correct_answer: Json
           created_at?: string
+          created_by?: string | null
+          difficulty?: string
           explanation?: string | null
+          generation_id?: string | null
           id?: string
+          learning_objective?: string | null
+          lesson_id?: string | null
           options?: Json
           points?: number
           position?: number
+          practice_item_id?: string | null
           prompt: string
           question_type?: Database["public"]["Enums"]["question_type"]
           quiz_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          topic?: string | null
+          updated_at?: string
+          version?: number
           video_path?: string | null
           video_url?: string | null
         }
         Update: {
+          allow_practice?: boolean
           correct_answer?: Json
           created_at?: string
+          created_by?: string | null
+          difficulty?: string
           explanation?: string | null
+          generation_id?: string | null
           id?: string
+          learning_objective?: string | null
+          lesson_id?: string | null
           options?: Json
           points?: number
           position?: number
+          practice_item_id?: string | null
           prompt?: string
           question_type?: Database["public"]["Enums"]["question_type"]
           quiz_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          topic?: string | null
+          updated_at?: string
+          version?: number
           video_path?: string | null
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "quiz_questions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_questions_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_questions_practice_item_id_fkey"
+            columns: ["practice_item_id"]
+            isOneToOne: false
+            referencedRelation: "practice_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quiz_questions_quiz_id_fkey"
             columns: ["quiz_id"]
@@ -1925,10 +2411,19 @@ export type Database = {
             referencedRelation: "quizzes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "quiz_questions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       quizzes: {
         Row: {
+          avoid_recent_questions: boolean
+          blueprint: Json
           created_at: string
           description: string | null
           id: string
@@ -1938,9 +2433,17 @@ export type Database = {
           module_id: string | null
           month_id: string
           passing_score: number | null
+          questions_per_attempt: number | null
+          randomize_options: boolean
+          randomize_questions: boolean
+          reveal_policy: string
           title: string
+          updated_at: string
+          version: number
         }
         Insert: {
+          avoid_recent_questions?: boolean
+          blueprint?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -1950,9 +2453,17 @@ export type Database = {
           module_id?: string | null
           month_id: string
           passing_score?: number | null
+          questions_per_attempt?: number | null
+          randomize_options?: boolean
+          randomize_questions?: boolean
+          reveal_policy?: string
           title: string
+          updated_at?: string
+          version?: number
         }
         Update: {
+          avoid_recent_questions?: boolean
+          blueprint?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -1962,7 +2473,13 @@ export type Database = {
           module_id?: string | null
           month_id?: string
           passing_score?: number | null
+          questions_per_attempt?: number | null
+          randomize_options?: boolean
+          randomize_questions?: boolean
+          reveal_policy?: string
           title?: string
+          updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -2287,50 +2804,6 @@ export type Database = {
           },
         ]
       }
-      quiz_questions_student: {
-        Row: {
-          id: string | null
-          options: Json | null
-          points: number | null
-          position: number | null
-          prompt: string | null
-          question_type: Database["public"]["Enums"]["question_type"] | null
-          quiz_id: string | null
-          video_path: string | null
-          video_url: string | null
-        }
-        Insert: {
-          id?: string | null
-          options?: Json | null
-          points?: number | null
-          position?: number | null
-          prompt?: string | null
-          question_type?: Database["public"]["Enums"]["question_type"] | null
-          quiz_id?: string | null
-          video_path?: string | null
-          video_url?: string | null
-        }
-        Update: {
-          id?: string | null
-          options?: Json | null
-          points?: number | null
-          position?: number | null
-          prompt?: string | null
-          question_type?: Database["public"]["Enums"]["question_type"] | null
-          quiz_id?: string | null
-          video_path?: string | null
-          video_url?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_questions_quiz_id_fkey"
-            columns: ["quiz_id"]
-            isOneToOne: false
-            referencedRelation: "quizzes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Functions: {
       accept_staff_invitation: { Args: { p_token: string }; Returns: Json }
@@ -2399,6 +2872,7 @@ export type Database = {
         Returns: string
       }
       bootstrap_super_admin: { Args: { p_email: string }; Returns: string }
+      can_edit_quiz: { Args: { p_quiz_id: string }; Returns: boolean }
       can_handle_ticket: { Args: { p_ticket_id: string }; Returns: boolean }
       can_manage_enrollment: {
         Args: { p_enrollment_id: string }
@@ -2408,6 +2882,10 @@ export type Database = {
       cancel_staff_invitation: {
         Args: { p_invitation_id: string }
         Returns: undefined
+      }
+      check_practice_answer: {
+        Args: { p_answer: Json; p_question_id: string }
+        Returns: Json
       }
       claim_email_batch: {
         Args: { p_limit?: number }
@@ -2442,6 +2920,27 @@ export type Database = {
           p_provider_id?: string
         }
         Returns: undefined
+      }
+      complete_quiz_generation_run: {
+        Args: {
+          p_drafts?: Json
+          p_error?: string
+          p_model?: string
+          p_provider?: string
+          p_run_id: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      create_quiz_generation_run: {
+        Args: {
+          p_difficulty_mix?: Json
+          p_include_practice?: boolean
+          p_lesson_ids?: string[]
+          p_quiz_id: string
+          p_requested_count: number
+        }
+        Returns: Json
       }
       create_staff_invitation: {
         Args: {
@@ -2542,6 +3041,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      fn_quiz_publish_problems: {
+        Args: { p_quiz_id: string }
+        Returns: string[]
+      }
       fn_student_can_access_lesson: {
         Args: { p_lesson_id: string }
         Returns: boolean
@@ -2581,6 +3084,11 @@ export type Database = {
         }[]
       }
       get_public_settings: { Args: never; Returns: Json }
+      get_quiz_attempt: { Args: { p_attempt_id: string }; Returns: Json }
+      get_quiz_publish_problems: {
+        Args: { p_quiz_id: string }
+        Returns: string[]
+      }
       get_site_content_public: {
         Args: never
         Returns: {
@@ -2597,6 +3105,10 @@ export type Database = {
         }
         Returns: Json
       }
+      import_quiz_questions: {
+        Args: { p_questions: Json; p_quiz_id: string }
+        Returns: Json
+      }
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
@@ -2604,6 +3116,31 @@ export type Database = {
       issue_certificate: {
         Args: { p_completion_date?: string; p_enrollment_id: string }
         Returns: string
+      }
+      list_quiz_generation_runs: {
+        Args: { p_quiz_id: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          difficulty_mix: Json
+          error: string | null
+          generated_count: number
+          id: string
+          model: string | null
+          provider: string | null
+          quiz_id: string
+          requested_by: string
+          requested_count: number
+          source_lesson_ids: string[]
+          source_practice_ids: string[]
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "quiz_generation_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       list_staff_invitations: {
         Args: never
@@ -2660,11 +3197,27 @@ export type Database = {
           total_score: number
         }[]
       }
+      my_topic_progress: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          accuracy: number
+          practice_answered: number
+          practice_correct: number
+          quiz_answered: number
+          quiz_correct: number
+          topic: string
+        }[]
+      }
       override_month_unlock: {
         Args: { p_enrollment_id: string; p_month_id: string; p_reason: string }
         Returns: string
       }
       owns_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
+      practice_questions: {
+        Args: { p_count?: number; p_month_id: string; p_topic?: string }
+        Returns: Json
+      }
+      preview_quiz_selection: { Args: { p_quiz_id: string }; Returns: Json }
       public_profiles_lookup: {
         Args: { p_ids: string[] }
         Returns: {
@@ -2718,6 +3271,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      review_quiz_question: {
+        Args: { p_decision: string; p_note?: string; p_question_id: string }
+        Returns: undefined
+      }
       revoke_certificate: {
         Args: { p_certificate_id: string; p_reason: string }
         Returns: undefined
@@ -2737,6 +3294,10 @@ export type Database = {
           p_position_seconds: number
         }
         Returns: undefined
+      }
+      save_quiz_answers: {
+        Args: { p_answers: Json; p_attempt_id: string }
+        Returns: Json
       }
       schedule_assessment: {
         Args: {
@@ -2809,19 +3370,50 @@ export type Database = {
         }
       }
       staff_mfa_satisfied: { Args: never; Returns: boolean }
+      staff_question_stats: {
+        Args: { p_quiz_id: string }
+        Returns: {
+          answered: number
+          correct_count: number
+          correct_pct: number
+          flag: string
+          last_used: string
+          question_id: string
+          times_used: number
+        }[]
+      }
+      staff_quiz_attempt_detail: {
+        Args: { p_attempt_id: string }
+        Returns: Json
+      }
       staff_quiz_questions: {
         Args: { p_quiz_id: string }
         Returns: {
+          allow_practice: boolean
           correct_answer: Json
           created_at: string
+          created_by: string | null
+          difficulty: string
           explanation: string | null
+          generation_id: string | null
           id: string
+          learning_objective: string | null
+          lesson_id: string | null
           options: Json
           points: number
           position: number
+          practice_item_id: string | null
           prompt: string
           question_type: Database["public"]["Enums"]["question_type"]
           quiz_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          status: string
+          topic: string | null
+          updated_at: string
+          version: number
           video_path: string | null
           video_url: string | null
         }[]
@@ -2832,7 +3424,9 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      staff_quiz_stats: { Args: { p_quiz_id: string }; Returns: Json }
       start_exam_attempt: { Args: { p_exam_id: string }; Returns: Json }
+      start_quiz_attempt: { Args: { p_quiz_id: string }; Returns: Json }
       storage_path_owner: { Args: { p_name: string }; Returns: boolean }
       submit_exam_attempt: { Args: { p_attempt_id: string }; Returns: Json }
       submit_identity: {
@@ -2860,7 +3454,7 @@ export type Database = {
         Returns: string
       }
       submit_quiz_attempt: {
-        Args: { p_answers: Json; p_quiz_id: string }
+        Args: { p_answers?: Json; p_attempt_id: string }
         Returns: Json
       }
       trainer_assigned_to_course: {

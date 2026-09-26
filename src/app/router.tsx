@@ -100,6 +100,7 @@ export const router = createBrowserRouter([
               { path: '/app/course/:courseId/month/:monthId', element: lazyPage(() => import('@/features/student/MonthPage')) },
               { path: '/app/lessons/:lessonId', element: lazyPage(() => import('@/features/student/LessonPage')) },
               { path: '/app/practice', element: lazyPage(() => import('@/features/student/PracticePage')) },
+              { path: '/app/practice/quiz', element: lazyPage(() => import('@/features/student/PracticeQuizPage')) },
               { path: '/app/quizzes', element: lazyPage(() => import('@/features/student/QuizzesPage')) },
               { path: '/app/quizzes/:quizId', element: lazyPage(() => import('@/features/student/QuizPage')) },
               { path: '/app/assessments', element: lazyPage(() => import('@/features/student/AssessmentsPage')) },

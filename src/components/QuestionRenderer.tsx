@@ -3,10 +3,11 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { Select, Textarea } from '@/components/ui/Field';
 import { resolveMediaUrl } from '@/services/student';
-import type { Json, MatchingOptions, McOption, QuizQuestionStudent, ExamQuestionStudent } from '@/types/database';
+import type { Json, MatchingOptions, McOption, AttemptQuestion } from '@/types/database';
 import { cn } from '@/lib/utils';
 
-type Q = QuizQuestionStudent | ExamQuestionStudent;
+/** Quiz attempt questions, practice questions and exam questions all share this shape. */
+type Q = Pick<AttemptQuestion, 'id' | 'question_type' | 'prompt' | 'video_path' | 'video_url' | 'options' | 'points'>;
 
 export interface QuestionFeedback {
   correct: boolean;

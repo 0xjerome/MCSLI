@@ -119,9 +119,9 @@ export default function TrainerDashboardPage() {
                     <span className="font-medium text-ink-900">{a.enrollment?.student?.full_name ?? 'Student'}</span> · {a.quiz?.title}
                   </span>
                   <span className="flex shrink-0 items-center gap-2 text-ink-500">
-                    <span className="font-semibold tabular-nums text-ink-800">{a.score}%</span>
-                    {a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>}
-                    {relativeTime(a.submitted_at)}
+                    <span className="font-semibold tabular-nums text-ink-800">{a.status === 'submitted' ? `${a.score ?? 0}%` : '—'}</span>
+                    {a.status !== 'submitted' ? <Badge tone="info" size="sm">In progress</Badge> : a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>}
+                    {relativeTime(a.submitted_at ?? a.started_at)}
                   </span>
                 </li>
               ))}

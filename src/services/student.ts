@@ -1,7 +1,7 @@
 import { getSupabase } from '@/lib/supabase';
 import type {
   Assessment, AssessmentAttempt, Certificate, Course, CourseMapMonth, CourseMonth, Enrollment, Exam, ExamAttemptStudent, ExamQuestionStudent,
-  Lesson, LessonProgress, LessonResource, Module, MonthOverride, PracticeItem, Quiz, QuizAttempt, QuizQuestionStudent, QuizResult, Json, Profile,
+  Lesson, LessonProgress, LessonResource, Module, MonthOverride, PracticeItem, PracticeFeedback, PracticeQuestion, Quiz, QuizAttempt, QuizAttemptStart, QuizResult, TopicProgress, Json, Profile,
 } from '@/types/database';
 import type { PaymentPlanType } from '@/domain/types';
 
@@ -105,18 +105,45 @@ export async function getQuiz(quizId: string): Promise<(Quiz & { month: CourseMo
   return must(await sb().from('quizzes').select('*, month:course_months(*)').eq('id', quizId).maybeSingle()) as (Quiz & { month: CourseMonth }) | null;
 }
 
-export async function listQuizQuestions(quizId: string): Promise<QuizQuestionStudent[]> {
-  return must(await sb().from('quiz_questions_student').select('*').eq('quiz_id', quizId).order('position')) as QuizQuestionStudent[];
-}
-
 export async function listQuizAttempts(enrollmentId: string, quizId?: string): Promise<QuizAttempt[]> {
-  let q = sb().from('quiz_attempts').select('*').eq('enrollment_id', enrollmentId).order('submitted_at', { ascending: false });
+  let q = sb().from('quiz_attempts').select('*').eq('enrollment_id', enrollmentId).order('started_at', { ascending: false });
   if (quizId) q = q.eq('quiz_id', quizId);
   return must(await q) as QuizAttempt[];
 }
 
-export async function submitQuizAttempt(quizId: string, answers: Record<string, Json>): Promise<QuizResult> {
-  return must(await sb().rpc('submit_quiz_attempt', { p_quiz_id: quizId, p_answers: answers })) as QuizResult;
+/**
+ * Questions reach the browser only inside the student's own attempt. The server selects and
+ * snapshots them; calling this again (refresh, retry, second tab) returns the same attempt.
+ */
+export async function startQuizAttempt(quizId: string): Promise<QuizAttemptStart> {
+  return must(await sb().rpc('start_quiz_attempt', { p_quiz_id: quizId })) as QuizAttemptStart;
+}
+
+export async function getQuizAttempt(attemptId: string): Promise<QuizResult> {
+  return must(await sb().rpc('get_quiz_attempt', { p_attempt_id: attemptId })) as QuizResult;
+}
+
+/** Autosave; answers for questions outside this attempt are dropped server-side. */
+export async function saveQuizAnswers(attemptId: string, answers: Record<string, Json>): Promise<boolean> {
+  const r = must(await sb().rpc('save_quiz_answers', { p_attempt_id: attemptId, p_answers: answers })) as { saved: boolean };
+  return r.saved;
+}
+
+export async function submitQuizAttempt(attemptId: string, answers: Record<string, Json>): Promise<QuizResult> {
+  return must(await sb().rpc('submit_quiz_attempt', { p_attempt_id: attemptId, p_answers: answers })) as QuizResult;
+}
+
+// Practice mode: approved questions of an unlocked month, one batch at a time, graded one by one.
+export async function listPracticeQuestions(monthId: string, count = 5, topic?: string | null): Promise<PracticeQuestion[]> {
+  return (must(await sb().rpc('practice_questions', { p_month_id: monthId, p_count: count, p_topic: topic ?? null })) as PracticeQuestion[]) ?? [];
+}
+
+export async function checkPracticeAnswer(questionId: string, answer: Json): Promise<PracticeFeedback> {
+  return must(await sb().rpc('check_practice_answer', { p_question_id: questionId, p_answer: answer })) as PracticeFeedback;
+}
+
+export async function getTopicProgress(enrollmentId: string): Promise<TopicProgress[]> {
+  return (must(await sb().rpc('my_topic_progress', { p_enrollment_id: enrollmentId })) as TopicProgress[]) ?? [];
 }
 
 // ---------------------------------------------------------------------------

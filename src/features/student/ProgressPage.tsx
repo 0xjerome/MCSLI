@@ -144,9 +144,9 @@ export default function ProgressPage() {
               <ul className="space-y-2 text-sm">
                 {(quizAttempts.data ?? []).slice(0, 6).map((a) => (
                   <li key={a.id} className="flex items-center justify-between">
-                    <span className="text-ink-600">{formatDate(a.submitted_at)}</span>
+                    <span className="text-ink-600">{formatDate(a.submitted_at ?? a.started_at)}</span>
                     <span className="flex items-center gap-2 font-semibold tabular-nums">
-                      {a.score}% {a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>}
+                      {a.status !== 'submitted' ? <Badge tone="info" size="sm">In progress</Badge> : <>{a.score ?? 0}% {a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>}</>}
                     </span>
                   </li>
                 ))}

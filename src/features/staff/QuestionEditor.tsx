@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Input, Select, Textarea, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Misc';
-import type { Json, MatchingOptions, McOption, QuestionType } from '@/types/database';
+import type { Json, Lesson, MatchingOptions, McOption, QuestionDifficulty, QuestionType } from '@/types/database';
 
 export interface QuestionDraft {
   id?: string;
@@ -17,6 +17,21 @@ export interface QuestionDraft {
   explanation?: string | null;
   points: number;
   requires_manual_grading?: boolean;
+  // question-bank metadata (quizzes only)
+  topic?: string | null;
+  difficulty?: QuestionDifficulty;
+  learning_objective?: string | null;
+  allow_practice?: boolean;
+  lesson_id?: string | null;
+  practice_item_id?: string | null;
+}
+
+/** An approved course video a question may use (published lesson or practice sign). */
+export interface MediaSource {
+  label: string;
+  value: string;
+  lesson_id?: string;
+  practice_item_id?: string;
 }
 
 const emptyMc = (): McOption[] => [
@@ -29,14 +44,19 @@ const emptyMatching = (): MatchingOptions => ({ left: [{ id: 'l1', text: '' }, {
 
 /**
  * Reusable editor for quiz and exam questions (multiple choice, video MC, matching, practical).
- * Correct answers are only ever sent to staff-only RPCs/tables.
+ * Correct answers are only ever sent to staff-only RPCs/tables. With `showMetadata` the
+ * question-bank fields (topic, difficulty, objective, lesson link, practice availability) are shown
+ * and video questions can pick an approved course video instead of typing a path.
  */
-export function QuestionEditor({ initial, allowPractical, showExplanation, onSave, onCancel, busy }: { initial?: Partial<QuestionDraft>; allowPractical?: boolean; showExplanation?: boolean; onSave: (q: QuestionDraft) => Promise<void>; onCancel: () => void; busy?: boolean }) {
+export function QuestionEditor({ initial, allowPractical, showExplanation, showMetadata, topics = [], lessons = [], media = [], onSave, onCancel, busy }: { initial?: Partial<QuestionDraft>; allowPractical?: boolean; showExplanation?: boolean; showMetadata?: boolean; topics?: string[]; lessons?: Lesson[]; media?: MediaSource[]; onSave: (q: QuestionDraft) => Promise<void>; onCancel: () => void; busy?: boolean }) {
   const [type, setType] = useState<QuestionType>(initial?.question_type ?? 'multiple_choice');
   const [mc, setMc] = useState<McOption[]>(initial && Array.isArray(initial.options) ? (initial.options as McOption[]) : emptyMc());
   const [matching, setMatching] = useState<MatchingOptions>(initial && initial.options && !Array.isArray(initial.options) ? (initial.options as MatchingOptions) : emptyMatching());
   const [correctMc, setCorrectMc] = useState<string>(typeof initial?.correct_answer === 'string' ? initial.correct_answer : 'a');
   const [correctMatching, setCorrectMatching] = useState<Record<string, string>>(initial?.correct_answer && typeof initial.correct_answer === 'object' && !Array.isArray(initial.correct_answer) ? (initial.correct_answer as Record<string, string>) : {});
+  const [video, setVideo] = useState(initial?.video_url ?? initial?.video_path ?? '');
+  const [practiceItemId, setPracticeItemId] = useState<string | null>(initial?.practice_item_id ?? null);
+  const [lessonId, setLessonId] = useState<string>(initial?.lesson_id ?? '');
   const [error, setError] = useState('');
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
@@ -52,7 +72,7 @@ export function QuestionEditor({ initial, allowPractical, showExplanation, onSav
       if (!filled.some((o) => o.id === correctMc)) return setError('Mark the correct option.');
       options = filled;
       correct = correctMc;
-      if (type === 'video_multiple_choice' && !String(fd.get('video_url')).trim()) return setError('A video URL/path is required for a video question.');
+      if (type === 'video_multiple_choice' && !video.trim()) return setError('A video is required for a video question.');
     } else if (type === 'matching') {
       const left = matching.left.filter((o) => o.text.trim());
       const right = matching.right.filter((o) => o.text.trim());
@@ -62,19 +82,29 @@ export function QuestionEditor({ initial, allowPractical, showExplanation, onSav
       correct = Object.fromEntries(left.map((l) => [l.id, correctMatching[l.id]!]));
     }
     setError('');
-    const video = String(fd.get('video_url')).trim();
+    const v = video.trim();
     await onSave({
       id: initial?.id,
       position: Number(fd.get('position')) || 1,
       question_type: type,
       prompt,
-      video_url: video && /^https?:\/\//.test(video) ? video : video.startsWith('/') ? video : null,
-      video_path: video && !/^https?:\/\//.test(video) && !video.startsWith('/') ? video : null,
+      video_url: v && /^https?:\/\//.test(v) ? v : v.startsWith('/') ? v : null,
+      video_path: v && !/^https?:\/\//.test(v) && !v.startsWith('/') ? v : null,
       options,
       correct_answer: correct,
       explanation: showExplanation ? String(fd.get('explanation')).trim() || null : undefined,
       points: Math.max(1, Number(fd.get('points')) || 1),
       requires_manual_grading: type === 'practical' || fd.get('manual') === 'on',
+      ...(showMetadata
+        ? {
+            topic: String(fd.get('topic') ?? '').trim().slice(0, 60) || null,
+            difficulty: (String(fd.get('difficulty') ?? 'medium') as QuestionDifficulty) || 'medium',
+            learning_objective: String(fd.get('learning_objective') ?? '').trim().slice(0, 200) || null,
+            allow_practice: fd.get('allow_practice') === 'on',
+            lesson_id: lessonId || null,
+            practice_item_id: practiceItemId,
+          }
+        : {}),
     });
   };
 
@@ -96,7 +126,40 @@ export function QuestionEditor({ initial, allowPractical, showExplanation, onSav
         <Input name="points" label="Points" type="number" min={1} defaultValue={initial?.points ?? 1} />
       </div>
       <Textarea name="prompt" label="Question" required rows={3} defaultValue={initial?.prompt ?? ''} data-autofocus />
-      <Input name="video_url" label="Video (URL, /public path, or course-media storage path)" optionalLabel defaultValue={initial?.video_url ?? initial?.video_path ?? ''} hint="Use an https:// link, a /demo/… path, or the storage path of a file uploaded to course-media." />
+
+      {showMetadata && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Input name="topic" label="Topic" optionalLabel list="question-topics" defaultValue={initial?.topic ?? ''} hint="Used by blueprints and analytics, e.g. Alphabet, Numbers, Greetings." />
+            <datalist id="question-topics">
+              {topics.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </div>
+          <Select name="difficulty" label="Difficulty" defaultValue={initial?.difficulty ?? 'medium'} options={[{ value: 'easy', label: 'Easy' }, { value: 'medium', label: 'Medium' }, { value: 'hard', label: 'Hard' }]} />
+          <Input name="learning_objective" label="Learning objective" optionalLabel defaultValue={initial?.learning_objective ?? ''} />
+          <Select label="Lesson this question tests" value={lessonId} onChange={(e) => setLessonId(e.target.value)} placeholder="Not linked" options={lessons.map((l) => ({ value: l.id, label: l.title }))} />
+          <Checkbox name="allow_practice" label="Available in practice mode" defaultChecked={initial?.allow_practice ?? true} />
+        </div>
+      )}
+
+      {media.length > 0 && (type === 'video_multiple_choice' || video) && (
+        <Select
+          label="Use an approved course video"
+          value={media.find((m) => m.value === video)?.value ?? ''}
+          placeholder="Choose a published lesson or practice sign…"
+          onChange={(e) => {
+            const m = media.find((x) => x.value === e.target.value);
+            setVideo(m?.value ?? '');
+            setPracticeItemId(m?.practice_item_id ?? null);
+            if (m?.lesson_id && !lessonId) setLessonId(m.lesson_id);
+          }}
+          options={media.map((m) => ({ value: m.value, label: m.label }))}
+          hint="Only published course media can be used; students receive a short-lived private link."
+        />
+      )}
+      <Input name="video_url" label="Video (URL, /public path, or course-media storage path)" optionalLabel value={video} onChange={(e) => { setVideo(e.target.value); setPracticeItemId(null); }} hint="Use an https:// link, a /demo/… path, or the storage path of a file uploaded to course-media." />
 
       {(type === 'multiple_choice' || type === 'video_multiple_choice') && (
         <fieldset>
@@ -120,6 +183,7 @@ export function QuestionEditor({ initial, allowPractical, showExplanation, onSav
               Add option
             </Button>
           )}
+          <p className="mt-2 text-xs text-ink-500">Option order is shuffled for each student when the quiz allows it; the correct answer is tracked by its letter, so the order here does not matter.</p>
         </fieldset>
       )}
 
@@ -152,6 +216,7 @@ export function QuestionEditor({ initial, allowPractical, showExplanation, onSav
       {type === 'practical' && <Alert tone="info">Practical questions cannot be auto-graded. The student writes notes (or a link) and the trainer awards points during grading.</Alert>}
       {type !== 'practical' && allowPractical && <Checkbox name="manual" label="Requires manual grading anyway" defaultChecked={initial?.requires_manual_grading} />}
       {showExplanation && <Textarea name="explanation" label="Explanation shown after answering" optionalLabel rows={2} defaultValue={initial?.explanation ?? ''} />}
+      {initial?.id && showMetadata && <p className="text-xs text-ink-500">Editing the prompt, options, answer, points or video creates a new version. Attempts already started keep the version they were given.</p>}
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>

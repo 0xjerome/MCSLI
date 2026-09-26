@@ -58,10 +58,10 @@ insert into public.practice_items (month_id, position, title, description, movem
   ('22222222-2222-2222-2222-222222222202', 1, '[DEMO] MOTHER / FATHER', 'Family signs practice.', 'Note the location on the face; contrast the two signs.', '/demo/demo-lesson.mp4'),
   ('22222222-2222-2222-2222-222222222203', 1, '[DEMO] Ask a WH-question', 'Practise WHERE, WHAT, WHO with the correct non-manual marker.', 'Furrow eyebrows for WH-questions; hold the sign at the end.', '/demo/demo-lesson.mp4');
 
-insert into public.quizzes (id, month_id, module_id, title, description, passing_score, max_attempts) values
-  ('55555555-5555-5555-5555-555555555501', '22222222-2222-2222-2222-222222222201', '33333333-3333-3333-3333-333333333011', '[DEMO] Month 1 quiz – alphabet & numbers', 'Sample questions for development only.', 70, null),
-  ('55555555-5555-5555-5555-555555555502', '22222222-2222-2222-2222-222222222202', null, '[DEMO] Month 2 quiz – everyday signs', 'Sample questions for development only.', 70, 3),
-  ('55555555-5555-5555-5555-555555555503', '22222222-2222-2222-2222-222222222203', null, '[DEMO] Month 3 quiz – sentences', 'Sample questions for development only.', 70, 3)
+insert into public.quizzes (id, month_id, module_id, title, description, passing_score, max_attempts, is_published) values
+  ('55555555-5555-5555-5555-555555555501', '22222222-2222-2222-2222-222222222201', '33333333-3333-3333-3333-333333333011', '[DEMO] Month 1 quiz – alphabet & numbers', 'Sample questions for development only.', 70, null, true),
+  ('55555555-5555-5555-5555-555555555502', '22222222-2222-2222-2222-222222222202', null, '[DEMO] Month 2 quiz – everyday signs', 'Sample questions for development only.', 70, 3, true),
+  ('55555555-5555-5555-5555-555555555503', '22222222-2222-2222-2222-222222222203', null, '[DEMO] Month 3 quiz – sentences', 'Sample questions for development only.', 70, 3, true)
 on conflict (id) do nothing;
 
 insert into public.quiz_questions (quiz_id, position, question_type, prompt, video_url, options, correct_answer, explanation, points) values

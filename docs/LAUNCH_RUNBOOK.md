@@ -20,6 +20,8 @@ payment methods entered and enabled; migrations `0001`–`0016` live; **Free pla
 | 5 | Jerome | after 4: Storage → Settings → upload limit; Auth → Attack Protection → leaked-password protection on; Vercel `VITE_MAX_UPLOAD_MB` | see §8 |
 | 6 | Jerome | Supabase account → Security → **MFA on**; Organization → Team → second owner | the Supabase login itself is single-factor and single-owner today |
 | 7 | MCSLI trainers/admins | enter the real curriculum and USL videos (§7) | 0 courses – students cannot enroll in anything yet |
+| 8 | Jerome (optional) | Supabase → Edge Functions → Secrets: add `ANTHROPIC_API_KEY` (and optionally `AI_MODEL`) | AI-assisted quiz **drafting** (never auto-approved) stays switched off until then: the *Generate drafts* button reports "AI question generation is not configured." Everything else about randomized quizzes works without it – see `docs/QUIZ_QUESTION_BANKS.md` |
+| 9 | Maurice / trainers | for each quiz: add ≥ 3× "questions per attempt" **approved** questions with topics and difficulties, set the blueprint, check the publish checklist, then publish | students now receive different question sets; the database refuses to publish a quiz whose bank cannot satisfy its blueprint |
 
 ## 1. Vercel environment variables (unblocks the live app)
 

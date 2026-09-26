@@ -449,10 +449,18 @@ await step('admin creates a 2-month [TEST] course with pricing, lessons, quiz an
   ok(await a.from('lessons').update({ video_path: media.m2, video_url: null }).eq('id', ctx.l2), 'lesson 2 media');
   ctx.media = media;
   ctx.quiz = ok(await a.from('quizzes').insert({ month_id: ctx.m1.id, title: '[TEST] Month 1 quiz', passing_score: 70 }).select().single(), 'quiz');
+  assert(ctx.quiz.is_published === false, 'new quizzes start unpublished');
+  const tooEarly = await a.from('quizzes').update({ is_published: true }).eq('id', ctx.quiz.id);
+  assert(tooEarly.error && /approved question is required/.test(tooEarly.error.message), 'a quiz without approved questions cannot be published');
   ok(await a.from('quiz_questions').insert([
-    { quiz_id: ctx.quiz.id, position: 1, prompt: '[TEST] Q1', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'a', explanation: '[TEST] A is right' },
-    { quiz_id: ctx.quiz.id, position: 2, prompt: '[TEST] Q2', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'b', explanation: '[TEST] B is right' },
+    { quiz_id: ctx.quiz.id, position: 1, prompt: '[TEST] Q1', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'a', explanation: '[TEST] A is right', topic: 'Alphabet', difficulty: 'easy' },
+    { quiz_id: ctx.quiz.id, position: 2, prompt: '[TEST] Q2', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'b', explanation: '[TEST] B is right', topic: 'Alphabet', difficulty: 'medium' },
+    // an unreviewed AI draft: must never reach a student
+    { quiz_id: ctx.quiz.id, position: 3, prompt: '[TEST] DRAFT – never shown', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'a', status: 'draft', source: 'ai_draft', topic: 'Alphabet' },
   ]), 'quiz questions');
+  const badBlueprint = await a.from('quizzes').update({ is_published: true, questions_per_attempt: 2, blueprint: { topics: { Numbers: 1 } } }).eq('id', ctx.quiz.id);
+  assert(badBlueprint.error && /requires 1 approved "Numbers" questions but only 0 exist/.test(badBlueprint.error.message), 'an unsatisfiable blueprint cannot be published');
+  ok(await a.from('quizzes').update({ is_published: true, questions_per_attempt: 2, blueprint: { topics: { Alphabet: 2 } } }).eq('id', ctx.quiz.id), 'quiz published with a valid blueprint');
   ctx.exam = ok(await a.from('exams').insert({ course_id: course.id, title: '[TEST] Final exam', is_final: true, status: 'open', time_limit_minutes: 30, max_attempts: 1, passing_score: 60 }).select().single(), 'exam');
   ok(await a.from('exam_questions').insert([
     { exam_id: ctx.exam.id, position: 1, question_type: 'multiple_choice', requires_manual_grading: false, prompt: '[TEST] E1', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correct_answer: 'a', points: 2 },
@@ -620,18 +628,82 @@ await step('course media: signed URLs only for unlocked months, only for enrolle
   const listed = ok(await ctx.student.client.storage.from('course-media').list(`lessons/${RUN}`), 'list');
   assert(!listed.some((f) => f.name === 'm2.mp4'), 'locked media is not even listed');
 });
-await step('quiz: answers hidden from the browser; failed attempt reveals nothing; pass scored server-side', async () => {
-  const direct = await ctx.student.client.from('quiz_questions').select('correct_answer').eq('quiz_id', ctx.quiz.id);
+await step('quiz: server-selected snapshot; bank and answers hidden; failed attempt reveals nothing; pass scored server-side', async () => {
+  const s = ctx.student.client;
+  const direct = await s.from('quiz_questions').select('correct_answer').eq('quiz_id', ctx.quiz.id);
   assert(direct.error, 'correct_answer column not readable');
-  const qs = ok(await ctx.student.client.from('quiz_questions_student').select('id, position').eq('quiz_id', ctx.quiz.id).order('position'), 'questions');
-  const fail = ok(await ctx.student.client.rpc('submit_quiz_attempt', { p_quiz_id: ctx.quiz.id, p_answers: { [qs[0].id]: 'b', [qs[1].id]: 'a' } }), 'fail');
-  assert(fail.score === 0 && !fail.passed && fail.answers_revealed === false && fail.questions.every((q) => q.correct_answer === null), 'failed attempt hides answers');
-  const pass = ok(await ctx.student.client.rpc('submit_quiz_attempt', { p_quiz_id: ctx.quiz.id, p_answers: { [qs[0].id]: 'a', [qs[1].id]: 'b' } }), 'pass');
-  assert(pass.score === 100 && pass.passed && pass.attempt_number === 2, 'passed on attempt 2');
-  const forged = await ctx.student.client.from('quiz_attempts').insert({ quiz_id: ctx.quiz.id, enrollment_id: ctx.enrollment, attempt_number: 9, answers: {}, score: 100, passed: true });
+  const bank = await s.from('quiz_questions').select('id, prompt').eq('quiz_id', ctx.quiz.id);
+  assert(bank.error || bank.data.length === 0, 'the question bank is not readable by students');
+  const first = ok(await s.rpc('start_quiz_attempt', { p_quiz_id: ctx.quiz.id }), 'start');
+  assert(first.status === 'in_progress' && first.questions.length === 2, 'two questions per attempt');
+  assert(first.questions.every((q) => !('correct_answer' in q) && !('explanation' in q) && !('question_id' in q) && !/DRAFT/.test(q.prompt)), 'no answers, no bank ids, no drafts');
+  const again = ok(await s.rpc('start_quiz_attempt', { p_quiz_id: ctx.quiz.id }), 'resume');
+  assert(again.attempt_id === first.attempt_id && again.resumed === true && again.questions.map((q) => q.id).join() === first.questions.map((q) => q.id).join(), 'refresh returns the same questions in the same order');
+  const wrong = Object.fromEntries(first.questions.map((q) => [q.id, 'zz']));
+  ok(await s.rpc('save_quiz_answers', { p_attempt_id: first.attempt_id, p_answers: { ...wrong, 'not-a-question': 'x' } }), 'autosave');
+  const resumed = ok(await s.rpc('get_quiz_attempt', { p_attempt_id: first.attempt_id }), 'get');
+  assert(Object.keys(resumed.answers).length === 2 && resumed.questions.every((q) => q.correct === null && q.correct_answer === null), 'autosaved answers survive a refresh; nothing graded yet');
+  const fail = ok(await s.rpc('submit_quiz_attempt', { p_attempt_id: first.attempt_id, p_answers: wrong }), 'fail');
+  assert(fail.score === 0 && !fail.passed && fail.answers_revealed === false && fail.questions.every((q) => q.correct_answer === null && q.correct === false), 'failed attempt hides answers');
+  const replay = ok(await s.rpc('submit_quiz_attempt', { p_attempt_id: first.attempt_id, p_answers: { score: 100 } }), 'replay');
+  assert(replay.score === 0, 'a replayed or modified submission cannot change the score');
+  const second = ok(await s.rpc('start_quiz_attempt', { p_quiz_id: ctx.quiz.id }), 'attempt 2');
+  assert(second.attempt_number === 2 && second.resumed === false, 'second attempt');
+  const answers = Object.fromEntries(second.questions.map((q) => [q.id, /Q1/.test(q.prompt) ? 'a' : 'b']));
+  const pass = ok(await s.rpc('submit_quiz_attempt', { p_attempt_id: second.attempt_id, p_answers: answers }), 'pass');
+  assert(pass.score === 100 && pass.passed && pass.attempt_number === 2 && pass.answers_revealed && pass.questions.every((q) => q.explanation), 'passed on attempt 2 with explanations revealed');
+  const forged = await s.from('quiz_attempts').insert({ quiz_id: ctx.quiz.id, enrollment_id: ctx.enrollment, attempt_number: 9, answers: {}, score: 100, passed: true });
   assert(forged.error, 'cannot write own score');
-  const tr = ok(await ctx.trainer.client.from('quiz_attempts').select('score').eq('enrollment_id', ctx.enrollment), 'trainer view');
+  const tampered = await s.from('quiz_attempts').update({ score: 100, passed: true }).eq('id', first.attempt_id).select();
+  assert(tampered.error || tampered.data.length === 0, 'cannot edit own attempt');
+  const guess = await s.rpc('get_quiz_attempt', { p_attempt_id: '00000000-0000-0000-0000-00000000dead' });
+  assert(guess.error, 'a guessed attempt id fails');
+  const snapshot = await s.from('quiz_attempt_questions').select('id').limit(1);
+  assert(snapshot.error || snapshot.data.length === 0, 'snapshot rows (with answers) are not readable directly');
+  const tr = ok(await ctx.trainer.client.from('quiz_attempts').select('score, status').eq('enrollment_id', ctx.enrollment), 'trainer view');
   assert(tr.length === 2, 'assigned trainer sees score history');
+  const detail = ok(await ctx.trainer.client.rpc('staff_quiz_attempt_detail', { p_attempt_id: second.attempt_id }), 'detail');
+  assert(detail.questions.length === 2 && detail.questions[0].correct_answer !== undefined && detail.questions.every((q) => q.is_correct === true), 'trainer sees the snapshot with answers');
+});
+await step('question bank: review is audited; practice mode is separate from grades; AI drafting reports not configured', async () => {
+  const s = ctx.student.client;
+  const t = ctx.trainer.client;
+  const a = ctx.admin.client;
+  const draft = ok(await t.rpc('staff_quiz_questions', { p_quiz_id: ctx.quiz.id }), 'bank').find((q) => /DRAFT/.test(q.prompt));
+  assert(draft && draft.status === 'draft' && draft.source === 'ai_draft', 'the draft is visible to staff only');
+  const studentReview = await s.rpc('review_quiz_question', { p_question_id: draft.id, p_decision: 'approve' });
+  assert(studentReview.error, 'students cannot approve questions');
+  ok(await t.rpc('review_quiz_question', { p_question_id: draft.id, p_decision: 'reject', p_note: '[TEST] not curriculum' }), 'reject');
+  const preview = ok(await t.rpc('preview_quiz_selection', { p_quiz_id: ctx.quiz.id }), 'preview');
+  assert(preview.questions.length === 2 && preview.questions.every((q) => !/DRAFT/.test(q.prompt)) && preview.problems.length === 0, 'instructor preview never includes drafts');
+  const stats = ok(await t.rpc('staff_quiz_stats', { p_quiz_id: ctx.quiz.id }), 'stats');
+  assert(stats.attempts === 2 && stats.students === 1 && stats.bank.rejected === 1 && stats.bank.approved === 2, 'quiz analytics');
+  const qstats = ok(await t.rpc('staff_question_stats', { p_quiz_id: ctx.quiz.id }), 'question stats');
+  assert(qstats.length === 2 && qstats.every((q) => q.times_used === 2), 'per-question analytics');
+  const problems = ok(await a.rpc('get_quiz_publish_problems', { p_quiz_id: ctx.quiz.id }), 'checklist');
+  assert(Array.isArray(problems) && problems.length === 0, 'publish checklist is clean');
+  const attemptsBefore = ok(await s.from('quiz_attempts').select('id').eq('enrollment_id', ctx.enrollment), 'attempts');
+  const practice = ok(await s.rpc('practice_questions', { p_month_id: ctx.m1.id, p_count: 5 }), 'practice');
+  assert(practice.length === 2 && practice.every((q) => !('correct_answer' in q) && !/DRAFT/.test(q.prompt)), 'practice serves approved questions only');
+  const fb = ok(await s.rpc('check_practice_answer', { p_question_id: practice[0].id, p_answer: /Q1/.test(practice[0].prompt) ? 'a' : 'b' }), 'feedback');
+  assert(fb.correct === true && fb.explanation, 'immediate practice feedback');
+  const attemptsAfter = ok(await s.from('quiz_attempts').select('id').eq('enrollment_id', ctx.enrollment), 'attempts after');
+  assert(attemptsAfter.length === attemptsBefore.length, 'practice never creates quiz attempts');
+  const progress = ok(await s.rpc('my_topic_progress', { p_enrollment_id: ctx.enrollment }), 'topic progress');
+  assert(progress.some((p) => p.topic === 'Alphabet'), 'topic progress is available to the student');
+  const lockedPractice = await s.rpc('practice_questions', { p_month_id: ctx.m2.id, p_count: 5 });
+  assert(lockedPractice.error && /locked/.test(lockedPractice.error.message), 'practice respects month locks');
+  // AI drafting: with no provider secret the function must report "not configured" – never invent questions
+  const gen = await t.functions.invoke('generate-question-drafts', { body: { quiz_id: ctx.quiz.id, requested_count: 3 } });
+  const genStatus = gen.error ? gen.error.context?.status : 200;
+  const genBody = gen.error ? await gen.error.context?.clone().json().catch(() => null) : gen.data;
+  assert(genStatus === 503 && genBody?.status === 'not_configured', `AI generation reports not configured (got ${genStatus} ${JSON.stringify(genBody)})`);
+  const runs = ok(await t.rpc('list_quiz_generation_runs', { p_quiz_id: ctx.quiz.id }), 'runs');
+  assert(runs.length === 1 && runs[0].status === 'not_configured' && runs[0].generated_count === 0, 'the run is logged as not configured');
+  const studentGen = await s.functions.invoke('generate-question-drafts', { body: { quiz_id: ctx.quiz.id, requested_count: 3 } });
+  assert(studentGen.error && studentGen.error.context?.status === 403, 'students cannot request drafts');
+  const bankNow = ok(await t.rpc('staff_quiz_questions', { p_quiz_id: ctx.quiz.id }), 'bank now');
+  assert(bankNow.length === 3, 'no fake questions were created');
 });
 await step('trainer records NOT PASSED → month 2 locked, reassessment created, student notified', async () => {
   const aid = ok(await ctx.trainer.client.rpc('schedule_assessment', { p_enrollment_id: ctx.enrollment, p_month_id: ctx.m1.id, p_scheduled_at: new Date().toISOString() }), 'schedule');

@@ -45,9 +45,12 @@ export const schemaContract: {
   payments: KeysExist<M.Payment, Row<'payments'>>;
   lesson_progress: KeysExist<M.LessonProgress, Row<'lesson_progress'>>;
   quizzes: KeysExist<M.Quiz, Row<'quizzes'>>;
-  quiz_questions_student: KeysExist<M.QuizQuestionStudent, ViewRow<'quiz_questions_student'>>;
   quiz_questions: KeysExist<M.QuizQuestion, Row<'quiz_questions'>>;
   quiz_attempts: KeysExist<M.QuizAttempt, Row<'quiz_attempts'>>;
+  quiz_attempt_questions: KeysExist<M.AttemptQuestion, Row<'quiz_attempt_questions'>>;
+  quiz_generation_runs: KeysExist<M.QuizGenerationRun, Row<'quiz_generation_runs'>>;
+  question_stats: KeysExist<M.QuestionStats, FnRow<'staff_question_stats'>>;
+  topic_progress: KeysExist<M.TopicProgress, FnRow<'my_topic_progress'>>;
   assessments: KeysExist<M.Assessment, Row<'assessments'>>;
   assessment_attempts: KeysExist<M.AssessmentAttempt, Row<'assessment_attempts'>>;
   month_overrides: KeysExist<M.MonthOverride, Row<'month_overrides'>>;
@@ -86,9 +89,12 @@ export const schemaContract: {
   payments: true,
   lesson_progress: true,
   quizzes: true,
-  quiz_questions_student: true,
   quiz_questions: true,
   quiz_attempts: true,
+  quiz_attempt_questions: true,
+  quiz_generation_runs: true,
+  question_stats: true,
+  topic_progress: true,
   assessments: true,
   assessment_attempts: true,
   month_overrides: true,
@@ -124,4 +130,7 @@ export const rpcContract: Fn[] = [
   'staff_quiz_questions', 'staff_exam_questions', 'staff_exam_attempts', 'get_public_settings',
   'get_site_content_public', 'get_my_identity', 'admin_list_identities', 'my_exam_attempts', 'public_profiles_lookup',
   'create_staff_invitation', 'cancel_staff_invitation', 'list_staff_invitations', 'accept_staff_invitation', 'get_course_publish_problems',
+  'start_quiz_attempt', 'get_quiz_attempt', 'save_quiz_answers', 'practice_questions', 'check_practice_answer', 'my_topic_progress',
+  'get_quiz_publish_problems', 'review_quiz_question', 'preview_quiz_selection', 'staff_quiz_stats', 'staff_question_stats',
+  'staff_quiz_attempt_detail', 'import_quiz_questions', 'list_quiz_generation_runs', 'create_quiz_generation_run', 'complete_quiz_generation_run',
 ];

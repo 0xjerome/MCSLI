@@ -4,18 +4,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload, Video, ListChecks, Hand } from 'lucide-react';
 import { usePageMeta } from '@/lib/seo';
 import { friendlyError } from '@/lib/supabase';
-import { getCourse, listMonths, saveMonth, listModules, saveModule, deleteModule, saveLesson, deleteLesson, listPractice, savePractice, deletePractice, listQuizzesForMonth, saveQuiz, deleteQuiz, listQuizQuestionsStaff, saveQuizQuestion, deleteQuizQuestion, uploadCourseMedia, validateCourseMedia, getCoursePublishProblems, COURSE_MEDIA_TYPES } from '@/services/staff';
+import { getCourse, listMonths, saveMonth, listModules, saveModule, deleteModule, saveLesson, deleteLesson, listPractice, savePractice, deletePractice, listQuizzesForMonth, saveQuiz, deleteQuiz, listQuizQuestionsStaff, getQuizPublishProblems, uploadCourseMedia, validateCourseMedia, getCoursePublishProblems, COURSE_MEDIA_TYPES } from '@/services/staff';
 import { CourseForm } from './AdminCoursesPage';
-import { QuestionEditor, type QuestionDraft } from '@/features/staff/QuestionEditor';
+import { QuestionBankDialog } from '@/features/staff/QuestionBankDialog';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Input, Textarea, Checkbox } from '@/components/ui/Field';
+import { Input, Textarea, Checkbox, Select } from '@/components/ui/Field';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
 import { Skeleton, ErrorState, EmptyState, Alert } from '@/components/ui/Misc';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
-import type { CourseMonth, Lesson, Module, PracticeItem, Quiz, QuizQuestion } from '@/types/database';
+import type { CourseMonth, Lesson, Module, PracticeItem, Quiz, QuizBlueprint, QuizRevealPolicy } from '@/types/database';
 
 export default function AdminCourseEditorPage() {
   const { courseId = '' } = useParams();
@@ -180,6 +180,9 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
   const [quizEdit, setQuizEdit] = useState<Partial<Quiz> | null>(null);
   const [questionsFor, setQuestionsFor] = useState<Quiz | null>(null);
   const [busy, setBusy] = useState(false);
+  const qc = useQueryClient();
+  // published lessons of this month feed question metadata (lesson link, approved video sources)
+  const lessonsInMonth: Lesson[] = (modules.data ?? []).flatMap((m) => ((m as Module & { lessons?: Lesson[] }).lessons ?? []));
 
   const run = async (fn: () => Promise<unknown>, msg: string, refetch: () => Promise<unknown>) => {
     setBusy(true);
@@ -286,18 +289,26 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
 
       {/* Quizzes */}
       <Card>
-        <CardHeader title="Quizzes" description="Quizzes marked required must be passed for certificate eligibility." action={<Button size="sm" onClick={() => setQuizEdit({ is_required: true, is_published: true })} leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}>Quiz</Button>} />
+        <CardHeader title="Quizzes" description="Each student draws their own question set from the approved bank. Quizzes marked required must be passed for the next month and for certificate eligibility." action={<Button size="sm" onClick={() => setQuizEdit({ is_required: true, is_published: false, randomize_questions: true, randomize_options: true, avoid_recent_questions: true, reveal_policy: 'after_pass_or_final', blueprint: {} })} leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}>Quiz</Button>} />
         {(quizzes.data ?? []).length === 0 ? (
           <EmptyState compact icon={<ListChecks className="h-5 w-5" />} title="No quizzes" />
         ) : (
           <ul className="divide-y divide-ink-100">
             {(quizzes.data ?? []).map((q) => (
-              <li key={q.id} className="flex items-center gap-3 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate">
-                  {q.title} <span className="text-xs text-ink-500">· pass {q.passing_score ?? course.quiz_passing_score}% {q.max_attempts ? `· max ${q.max_attempts} attempts` : ''}</span>
+              <li key={q.id} className="flex flex-wrap items-center gap-2 py-2 text-sm sm:flex-nowrap sm:gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{q.title}</span>
+                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+                    {q.is_published ? <Badge tone="success" size="sm">Published</Badge> : <Badge tone="warning" size="sm">Draft</Badge>}
+                    <QuizChecklistBadge quizId={q.id} />
+                    <span>
+                      pass {q.passing_score ?? course.quiz_passing_score}% · {q.questions_per_attempt ? `${q.questions_per_attempt} per attempt` : 'all approved questions'}
+                      {q.max_attempts ? ` · max ${q.max_attempts} attempts` : ''} · v{q.version}
+                    </span>
+                  </span>
                 </span>
                 <Button size="sm" variant="outline" onClick={() => setQuestionsFor(q)}>
-                  Questions
+                  Question bank
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setQuizEdit(q)} aria-label="Edit quiz">
                   <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -432,116 +443,144 @@ function MonthEditor({ month, course, onChanged }: { month: CourseMonth; course:
       </Dialog>
 
       {/* Quiz dialog */}
-      <Dialog open={Boolean(quizEdit)} onClose={() => setQuizEdit(null)} title={quizEdit?.id ? 'Edit quiz' : 'Add quiz'}>
+      <Dialog open={Boolean(quizEdit)} onClose={() => setQuizEdit(null)} title={quizEdit?.id ? 'Edit quiz' : 'Add quiz'} size="lg">
         {quizEdit && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              if (await run(() => saveQuiz({ id: quizEdit.id, month_id: month.id, module_id: String(fd.get('module_id')) || null, title: String(fd.get('title')).trim(), description: String(fd.get('description')).trim() || null, passing_score: Number(fd.get('passing_score')) || null, max_attempts: Number(fd.get('max_attempts')) || null, is_required: fd.get('is_required') === 'on', is_published: fd.get('is_published') === 'on' }), 'Quiz saved', quizzes.refetch)) setQuizEdit(null);
+          <QuizForm
+            quiz={quizEdit}
+            course={course}
+            busy={busy}
+            onCancel={() => setQuizEdit(null)}
+            onSave={async (payload) => {
+              if (await run(() => saveQuiz({ ...payload, id: quizEdit.id, month_id: month.id }), 'Quiz saved', async () => { await quizzes.refetch(); await qc.invalidateQueries({ queryKey: ['quiz-publish-problems'] }); })) setQuizEdit(null);
             }}
-            className="space-y-4"
-          >
-            <Input name="title" label="Title" required defaultValue={quizEdit.title ?? ''} data-autofocus />
-            <Textarea name="description" label="Description" optionalLabel rows={2} defaultValue={quizEdit.description ?? ''} />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="passing_score" type="number" min={0} max={100} label="Pass mark (%)" optionalLabel defaultValue={quizEdit.passing_score ?? ''} hint={`Course default: ${course.quiz_passing_score}%`} />
-              <Input name="max_attempts" type="number" min={1} label="Max attempts" optionalLabel defaultValue={quizEdit.max_attempts ?? ''} hint="Empty = unlimited" />
-            </div>
-            <input type="hidden" name="module_id" value={quizEdit.module_id ?? ''} />
-            <div className="flex gap-6">
-              <Checkbox name="is_required" label="Required for certificate" defaultChecked={quizEdit.is_required ?? true} />
-              <Checkbox name="is_published" label="Published" defaultChecked={quizEdit.is_published ?? true} />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setQuizEdit(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" loading={busy}>
-                Save
-              </Button>
-            </div>
-          </form>
+          />
         )}
       </Dialog>
 
-      {questionsFor && <QuizQuestionsDialog quiz={questionsFor} onClose={() => setQuestionsFor(null)} />}
+      {questionsFor && <QuestionBankDialog quiz={questionsFor} lessons={lessonsInMonth} practiceItems={practice.data ?? []} onClose={() => { setQuestionsFor(null); void quizzes.refetch(); }} />}
     </div>
   );
 }
 
-function QuizQuestionsDialog({ quiz, onClose }: { quiz: Quiz; onClose: () => void }) {
-  const toast = useToast();
-  const questions = useQuery({ queryKey: ['admin-quiz-questions', quiz.id], queryFn: () => listQuizQuestionsStaff(quiz.id) });
-  const [editing, setEditing] = useState<Partial<QuizQuestion> | null>(null);
-  const [busy, setBusy] = useState(false);
+/** Compact publish-checklist state for a quiz row (the full list lives in the question bank dialog). */
+function QuizChecklistBadge({ quizId }: { quizId: string }) {
+  const problems = useQuery({ queryKey: ['quiz-publish-problems', quizId], queryFn: () => getQuizPublishProblems(quizId) });
+  if (problems.isLoading || problems.isError) return null;
+  const n = (problems.data ?? []).length;
+  return n === 0 ? <Badge tone="success" size="sm">Checklist OK</Badge> : <Badge tone="danger" size="sm" title={(problems.data ?? []).join('; ')}>{n} checklist issue{n === 1 ? '' : 's'}</Badge>;
+}
 
-  const save = async (d: QuestionDraft) => {
-    setBusy(true);
-    try {
-      await saveQuizQuestion({ id: d.id, quiz_id: quiz.id, position: d.position, question_type: d.question_type, prompt: d.prompt, video_url: d.video_url, video_path: d.video_path, options: d.options, correct_answer: d.correct_answer ?? '', explanation: d.explanation ?? null, points: d.points });
-      await questions.refetch();
-      setEditing(null);
-      toast.success('Question saved');
-    } catch (err) {
-      toast.error('Failed', friendlyError(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+type QuizPayload = Omit<Partial<Quiz>, 'id' | 'month_id'>;
+
+/** Quiz settings incl. the selection blueprint (configured here, never in SQL). */
+function QuizForm({ quiz, course, busy, onCancel, onSave }: { quiz: Partial<Quiz>; course: { quiz_passing_score: number }; busy: boolean; onCancel: () => void; onSave: (payload: QuizPayload) => Promise<void> }) {
+  const bank = useQuery({ queryKey: ['admin-quiz-questions', quiz.id], queryFn: () => listQuizQuestionsStaff(quiz.id!), enabled: Boolean(quiz.id) });
+  const knownTopics = Array.from(new Set((bank.data ?? []).map((q) => q.topic).filter((t): t is string => Boolean(t)))).sort();
+  const approvedByTopic = (bank.data ?? []).filter((q) => q.status === 'approved').reduce<Record<string, number>>((acc, q) => { if (q.topic) acc[q.topic] = (acc[q.topic] ?? 0) + 1; return acc; }, {});
+  const approved = (bank.data ?? []).filter((q) => q.status === 'approved').length;
+  const [topics, setTopics] = useState<{ topic: string; count: number }[]>(Object.entries(quiz.blueprint?.topics ?? {}).map(([topic, count]) => ({ topic, count })));
+  const [difficulty, setDifficulty] = useState<{ easy: number; medium: number; hard: number }>({ easy: quiz.blueprint?.difficulty?.easy ?? 0, medium: quiz.blueprint?.difficulty?.medium ?? 0, hard: quiz.blueprint?.difficulty?.hard ?? 0 });
+  const [perAttempt, setPerAttempt] = useState<string>(quiz.questions_per_attempt ? String(quiz.questions_per_attempt) : '');
+
+  const quotaTotal = topics.reduce((a, t) => a + (t.count || 0), 0);
+  const diffTotal = difficulty.easy + difficulty.medium + difficulty.hard;
+  const n = Number(perAttempt) || null;
 
   return (
-    <Dialog open onClose={onClose} title={`Questions – ${quiz.title}`} size="xl">
-      {editing ? (
-        <QuestionEditor initial={editing as Partial<QuestionDraft>} showExplanation onSave={save} onCancel={() => setEditing(null)} busy={busy} />
-      ) : (
-        <>
-          <div className="mb-3 flex justify-end">
-            <Button size="sm" onClick={() => setEditing({ position: (questions.data?.length ?? 0) + 1 })} leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}>
-              Add question
-            </Button>
-          </div>
-          {questions.isLoading ? (
-            <Skeleton lines={3} />
-          ) : (questions.data ?? []).length === 0 ? (
-            <Alert tone="info">No questions yet. Add real curriculum questions here — demo questions are only seeded in development.</Alert>
-          ) : (
-            <ol className="space-y-2">
-              {(questions.data ?? []).map((q, i) => (
-                <li key={q.id} className="flex items-start gap-3 rounded-xl border border-ink-200 p-3 text-sm">
-                  <span className="font-bold text-ink-300">{i + 1}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-ink-900">{q.prompt}</span>
-                    <span className="text-xs text-ink-500">
-                      {q.question_type.replace(/_/g, ' ')} · {q.points} pt · answer {JSON.stringify(q.correct_answer)}
-                    </span>
-                  </span>
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(q)} aria-label="Edit">
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label="Delete"
-                    onClick={async () => {
-                      if (!window.confirm('Delete this question?')) return;
-                      try {
-                        await deleteQuizQuestion(q.id);
-                        await questions.refetch();
-                      } catch (err) {
-                        toast.error('Failed', friendlyError(err));
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 text-danger-600" aria-hidden="true" />
-                  </Button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </>
-      )}
-    </Dialog>
+    <form
+      onSubmit={async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const blueprint: QuizBlueprint = {};
+        const t = Object.fromEntries(topics.filter((x) => x.topic.trim() && x.count > 0).map((x) => [x.topic.trim(), x.count]));
+        if (Object.keys(t).length) blueprint.topics = t;
+        const d = Object.fromEntries(Object.entries(difficulty).filter(([, v]) => v > 0)) as QuizBlueprint['difficulty'];
+        if (d && Object.keys(d).length) blueprint.difficulty = d;
+        await onSave({
+          module_id: quiz.module_id ?? null,
+          title: String(fd.get('title')).trim(),
+          description: String(fd.get('description')).trim() || null,
+          passing_score: Number(fd.get('passing_score')) || null,
+          max_attempts: Number(fd.get('max_attempts')) || null,
+          is_required: fd.get('is_required') === 'on',
+          is_published: fd.get('is_published') === 'on',
+          questions_per_attempt: n,
+          randomize_questions: fd.get('randomize_questions') === 'on',
+          randomize_options: fd.get('randomize_options') === 'on',
+          avoid_recent_questions: fd.get('avoid_recent_questions') === 'on',
+          reveal_policy: String(fd.get('reveal_policy')) as QuizRevealPolicy,
+          blueprint,
+        });
+      }}
+      className="space-y-4"
+    >
+      <Input name="title" label="Title" required defaultValue={quiz.title ?? ''} data-autofocus />
+      <Textarea name="description" label="Description" optionalLabel rows={2} defaultValue={quiz.description ?? ''} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input name="passing_score" type="number" min={0} max={100} label="Pass mark (%)" optionalLabel defaultValue={quiz.passing_score ?? ''} hint={`Course default: ${course.quiz_passing_score}%`} />
+        <Input name="max_attempts" type="number" min={1} label="Max attempts" optionalLabel defaultValue={quiz.max_attempts ?? ''} hint="Empty = unlimited" />
+      </div>
+
+      <fieldset className="rounded-xl border border-ink-200 p-4">
+        <legend className="px-1 text-sm font-semibold text-ink-800">Question selection</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Questions per attempt" type="number" min={1} max={100} value={perAttempt} onChange={(e) => setPerAttempt(e.target.value)} optionalLabel hint={quiz.id ? `Empty = every approved question (${approved} approved now). Aim for at least 3× this many approved questions.` : 'Empty = every approved question. You can change this after adding questions.'} />
+          <Select name="reveal_policy" label="Show correct answers" defaultValue={quiz.reveal_policy ?? 'after_pass_or_final'} options={[{ value: 'after_pass_or_final', label: 'After passing or on the final attempt' }, { value: 'always', label: 'After every attempt' }, { value: 'never', label: 'Never (only right/wrong)' }]} />
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <Checkbox name="randomize_questions" label="Shuffle question order" defaultChecked={quiz.randomize_questions ?? true} />
+          <Checkbox name="randomize_options" label="Shuffle answer options" defaultChecked={quiz.randomize_options ?? true} />
+          <Checkbox name="avoid_recent_questions" label="Retakes prefer unseen questions" defaultChecked={quiz.avoid_recent_questions ?? true} />
+        </div>
+      </fieldset>
+
+      <fieldset className="rounded-xl border border-ink-200 p-4">
+        <legend className="px-1 text-sm font-semibold text-ink-800">Blueprint (quotas every attempt must satisfy)</legend>
+        <p className="text-xs text-ink-500">Optional. Remaining slots are filled at random from the approved pool. Publishing is refused if the quotas cannot be met, e.g. “requires 3 approved "Alphabet" questions but only 2 exist”.</p>
+        <div className="mt-3 space-y-2">
+          {topics.map((t, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1">
+                <Input label={i === 0 ? 'Topic' : <span className="sr-only">Topic</span>} list="blueprint-topics" value={t.topic} onChange={(e) => setTopics((ts) => ts.map((x, j) => (j === i ? { ...x, topic: e.target.value } : x)))} />
+              </div>
+              <div className="w-28">
+                <Input label={i === 0 ? 'Per attempt' : <span className="sr-only">Per attempt</span>} type="number" min={0} value={t.count} onChange={(e) => setTopics((ts) => ts.map((x, j) => (j === i ? { ...x, count: Number(e.target.value) || 0 } : x)))} hint={approvedByTopic[t.topic] != null ? `${approvedByTopic[t.topic]} approved` : undefined} />
+              </div>
+              <Button type="button" variant="ghost" size="sm" aria-label="Remove topic quota" onClick={() => setTopics((ts) => ts.filter((_, j) => j !== i))}>
+                <Trash2 className="h-4 w-4 text-danger-600" aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <datalist id="blueprint-topics">
+            {knownTopics.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+          <Button type="button" variant="ghost" size="sm" leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={() => setTopics((ts) => [...ts, { topic: '', count: 1 }])}>
+            Add topic quota
+          </Button>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <Input label="Easy" type="number" min={0} value={difficulty.easy} onChange={(e) => setDifficulty({ ...difficulty, easy: Number(e.target.value) || 0 })} />
+          <Input label="Medium" type="number" min={0} value={difficulty.medium} onChange={(e) => setDifficulty({ ...difficulty, medium: Number(e.target.value) || 0 })} />
+          <Input label="Hard" type="number" min={0} value={difficulty.hard} onChange={(e) => setDifficulty({ ...difficulty, hard: Number(e.target.value) || 0 })} />
+        </div>
+        {n != null && (quotaTotal > n || diffTotal > n) && <Alert tone="warning" className="mt-3">Quotas add up to more than {n} questions per attempt – publishing will be refused until this is fixed.</Alert>}
+      </fieldset>
+
+      <div className="flex flex-wrap gap-6">
+        <Checkbox name="is_required" label="Required for the next month and the certificate" defaultChecked={quiz.is_required ?? true} />
+        <Checkbox name="is_published" label="Published (validated against the checklist)" defaultChecked={quiz.is_published ?? false} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={busy}>
+          Save
+        </Button>
+      </div>
+    </form>
   );
 }
 

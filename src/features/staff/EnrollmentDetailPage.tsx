@@ -308,7 +308,7 @@ export default function EnrollmentDetailPage() {
                 <li key={a.id} className="flex items-center justify-between gap-2 py-2">
                   <span className="truncate">{a.quiz?.title}</span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {a.score}% {a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>} <span className="text-ink-500">{formatDate(a.submitted_at)}</span>
+                    {a.status !== 'submitted' ? <Badge tone="info" size="sm">In progress</Badge> : <>{a.score ?? 0}% {a.passed ? <Badge tone="success" size="sm">Pass</Badge> : <Badge size="sm">Retry</Badge>}</>} <span className="text-ink-500">{formatDate(a.submitted_at ?? a.started_at)}</span>
                   </span>
                 </li>
               ))}

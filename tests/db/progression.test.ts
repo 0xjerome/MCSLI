@@ -37,11 +37,15 @@ async function completeMonth(user: TestUser, monthId: string) {
   const lessons = (await client.query(`select l.id from public.lessons l join public.modules mo on mo.id = l.module_id where mo.month_id = $1 and l.is_required`, [monthId])).rows;
   for (const l of lessons) await asUser(client, user, (q) => q(`select public.save_lesson_progress($1, 0, true)`, [l.id]));
   const quizzes = (await client.query(`select id from public.quizzes where month_id = $1 and is_required`, [monthId])).rows;
-  for (const qz of quizzes) {
-    const full = (await client.query(`select id, correct_answer from public.quiz_questions where quiz_id = $1`, [qz.id])).rows;
-    const ans = Object.fromEntries(full.map((r) => [r.id, r.correct_answer]));
-    await asUser(client, user, (q) => q(`select public.submit_quiz_attempt($1, $2::jsonb)`, [qz.id, JSON.stringify(ans)]));
-  }
+  for (const qz of quizzes) await passQuiz(user, qz.id);
+}
+
+/** Start an attempt, answer from the server-side snapshot (as the database owner) and submit, acting as the student. */
+async function passQuiz(user: TestUser, quizId: string) {
+  const started = await asUser(client, user, async (q) => (await q(`select public.start_quiz_attempt($1) as r`, [quizId])).rows[0].r as { attempt_id: string });
+  const snap = (await client.query(`select id, correct_answer from public.quiz_attempt_questions where attempt_id = $1`, [started.attempt_id])).rows;
+  const ans = Object.fromEntries(snap.map((r) => [r.id, r.correct_answer]));
+  return asUser(client, user, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [started.attempt_id, JSON.stringify(ans)])).rows[0].r);
 }
 
 async function scheduleAndRecord(who: TestUser, enrollmentId: string, monthId: string, result: 'pass' | 'not_passed', score = 80) {
@@ -261,16 +265,19 @@ describe('quizzes', () => {
     const enrollmentId = (await client.query(`select id from public.enrollments where user_id = $1`, [ugStudent.id])).rows[0].id;
     const msg = await expectDenied(asUser(client, ugStudent, (q) => q(`select correct_answer from public.quiz_questions where quiz_id = $1`, [DEMO.quiz1])));
     expect(msg).toMatch(/permission denied/);
-    const qs = await asUser(client, ugStudent, async (q) => (await q(`select id, question_type from public.quiz_questions_student where quiz_id = $1 order by position`, [DEMO.quiz1])).rows);
-    expect(qs).toHaveLength(3);
-    const answers = { [qs[0].id]: 'a', [qs[1].id]: 'b', [qs[2].id]: { l1: 'r1', l2: 'r2', l3: 'r3' } };
-    const result = await asUser(client, ugStudent, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [DEMO.quiz1, JSON.stringify(answers)])).rows[0].r);
+    // questions reach the student only inside their own attempt (the legacy quiz_questions_student view is gone)
+    const started = await asUser(client, ugStudent, async (q) => (await q(`select public.start_quiz_attempt($1) as r`, [DEMO.quiz1])).rows[0].r);
+    expect(started.questions).toHaveLength(3);
+    expect(started.questions.every((x: Record<string, unknown>) => !('correct_answer' in x) && !('explanation' in x))).toBe(true);
+    const result = await passQuiz(ugStudent, DEMO.quiz1);
+    expect(result.attempt_id).toBe(started.attempt_id);
     expect(result.score).toBe(100);
     expect(result.passed).toBe(true);
     expect(result.answers_revealed).toBe(true);
     expect(result.questions[0].explanation).toBeTruthy();
     // a failed attempt with retries left says WHICH answers were wrong, never what the right ones are
-    const wrong = await asUser(client, ugStudent, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [DEMO.quiz1, JSON.stringify({ [qs[0].id]: 'd' })])).rows[0].r);
+    const second = await asUser(client, ugStudent, async (q) => (await q(`select public.start_quiz_attempt($1) as r`, [DEMO.quiz1])).rows[0].r);
+    const wrong = await asUser(client, ugStudent, async (q) => (await q(`select public.submit_quiz_attempt($1, $2::jsonb) as r`, [second.attempt_id, JSON.stringify({ [second.questions[0].id]: 'zz' })])).rows[0].r);
     expect(wrong.score).toBe(0);
     expect(wrong.attempt_number).toBe(result.attempt_number + 1);
     expect(wrong.answers_revealed).toBe(false);
@@ -279,9 +286,8 @@ describe('quizzes', () => {
     await expectDenied(asUser(client, ugStudent, (q) => q(`insert into public.quiz_attempts (quiz_id, enrollment_id, attempt_number, answers, score, passed) values ($1, $2, 99, '{}', 100, true)`, [DEMO.quiz1, enrollmentId])));
     const staffRows = await asUser(client, trainer, async (q) => (await q(`select correct_answer from public.staff_quiz_questions($1)`, [DEMO.quiz1])).rows);
     expect(staffRows).toHaveLength(3);
-    const denied = await expectDenied(asUser(client, otherTrainer, (q) => q(`select public.submit_quiz_attempt($1, '{}'::jsonb)`, [DEMO.quiz1])));
+    const denied = await expectDenied(asUser(client, otherTrainer, (q) => q(`select public.start_quiz_attempt($1)`, [DEMO.quiz1])));
     expect(denied).toMatch(/locked|not enrolled/);
-    void enrollmentId;
   });
 });
 

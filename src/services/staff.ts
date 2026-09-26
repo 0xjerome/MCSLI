@@ -1,7 +1,7 @@
 import { getSupabase } from '@/lib/supabase';
 import type {
   Assessment, AssessmentAttempt, AuditLog, Certificate, Cohort, Course, CourseMonth, Enrollment, Exam, ExamAttempt, ExamQuestion, IdentityDocument, IdentitySummary,
-  Lesson, LessonProgress, Module, MonthOverride, Payment, PaymentMethod, PlatformSettingRow, PracticeItem, Profile, PublicProfile, Quiz, QuizAttempt, QuizQuestion,
+  Lesson, LessonProgress, Module, MonthOverride, Payment, PaymentMethod, PlatformSettingRow, PracticeItem, Profile, PublicProfile, Quiz, QuizAttempt, QuizQuestion, QuizAttemptDetail, QuizGenerationRun, QuizSelectionPreview, QuizStats, QuestionStats, QuestionDifficulty, QuestionType, McOption, MatchingOptions,
   AiTrainingAsset,
   SiteContentRow, TrainerStats, AdminStats, TrainerAssignment, ContactMessage, EventRow, DiscussionReport, Json,
 } from '@/types/database';
@@ -93,7 +93,7 @@ export async function listLessonProgressFor(enrollmentId: string): Promise<Lesso
   return must(await sb().from('lesson_progress').select('*').eq('enrollment_id', enrollmentId)) as LessonProgress[];
 }
 export async function listQuizAttemptsFor(enrollmentId?: string, courseId?: string): Promise<(QuizAttempt & { quiz: Pick<Quiz, 'id' | 'title' | 'month_id'>; enrollment?: { user_id: string; student: PublicProfile } })[]> {
-  let q = sb().from('quiz_attempts').select('*, quiz:quizzes(id, title, month_id), enrollment:enrollments(user_id, course_id, student:profiles!enrollments_user_id_fkey(id, full_name, role, avatar_path))').order('submitted_at', { ascending: false }).limit(300);
+  let q = sb().from('quiz_attempts').select('*, quiz:quizzes(id, title, month_id), enrollment:enrollments(user_id, course_id, student:profiles!enrollments_user_id_fkey(id, full_name, role, avatar_path))').order('started_at', { ascending: false }).limit(300);
   if (enrollmentId) q = q.eq('enrollment_id', enrollmentId);
   const rows = must(await q) as (QuizAttempt & { quiz: Pick<Quiz, 'id' | 'title' | 'month_id'>; enrollment?: { user_id: string; course_id: string; student: PublicProfile } })[];
   return courseId ? rows.filter((r) => r.enrollment?.course_id === courseId) : rows;
@@ -271,16 +271,27 @@ export async function deletePractice(id: string): Promise<void> {
 export async function listQuizzesForMonth(monthId: string): Promise<Quiz[]> {
   return must(await sb().from('quizzes').select('*').eq('month_id', monthId).order('created_at')) as Quiz[];
 }
+/**
+ * Publishing is validated by the database (approved pool, blueprint quotas, question content).
+ * A brand-new quiz is created unpublished; if "published" was requested it is then published in a
+ * second step so the checklist error names what is missing instead of refusing the whole save.
+ */
 export async function saveQuiz(q: Partial<Quiz> & { id?: string }): Promise<string> {
   if (q.id) {
     const { id, ...rest } = q;
     must(await sb().from('quizzes').update(rest).eq('id', id));
     return id;
   }
-  return (must(await sb().from('quizzes').insert(q).select('id').single()) as { id: string }).id;
+  const { is_published, ...rest } = q;
+  const id = (must(await sb().from('quizzes').insert({ ...rest, is_published: false }).select('id').single()) as { id: string }).id;
+  if (is_published) must(await sb().from('quizzes').update({ is_published: true }).eq('id', id));
+  return id;
 }
 export async function deleteQuiz(id: string): Promise<void> {
   must(await sb().from('quizzes').delete().eq('id', id));
+}
+export async function getQuizPublishProblems(quizId: string): Promise<string[]> {
+  return (must(await sb().rpc('get_quiz_publish_problems', { p_quiz_id: quizId })) as string[]) ?? [];
 }
 export async function listQuizQuestionsStaff(quizId: string): Promise<QuizQuestion[]> {
   return must(await sb().rpc('staff_quiz_questions', { p_quiz_id: quizId })) as QuizQuestion[];
@@ -291,8 +302,74 @@ export async function saveQuizQuestion(q: Partial<QuizQuestion> & { id?: string 
     must(await sb().from('quiz_questions').update(rest).eq('id', id));
   } else must(await sb().from('quiz_questions').insert(q));
 }
+/** Questions with student history cannot be deleted (the database refuses); retire them instead. */
 export async function deleteQuizQuestion(id: string): Promise<void> {
   must(await sb().from('quiz_questions').delete().eq('id', id));
+}
+export type QuestionReviewDecision = 'approve' | 'reject' | 'retire' | 'draft';
+export async function reviewQuizQuestion(id: string, decision: QuestionReviewDecision, note?: string | null): Promise<void> {
+  must(await sb().rpc('review_quiz_question', { p_question_id: id, p_decision: decision, p_note: note ?? null }));
+}
+export async function previewQuizSelection(quizId: string): Promise<QuizSelectionPreview> {
+  return must(await sb().rpc('preview_quiz_selection', { p_quiz_id: quizId })) as QuizSelectionPreview;
+}
+export async function getQuizStats(quizId: string): Promise<QuizStats> {
+  return must(await sb().rpc('staff_quiz_stats', { p_quiz_id: quizId })) as QuizStats;
+}
+export async function getQuestionStats(quizId: string): Promise<QuestionStats[]> {
+  return (must(await sb().rpc('staff_question_stats', { p_quiz_id: quizId })) as QuestionStats[]) ?? [];
+}
+export async function getQuizAttemptDetail(attemptId: string): Promise<QuizAttemptDetail> {
+  return must(await sb().rpc('staff_quiz_attempt_detail', { p_attempt_id: attemptId })) as QuizAttemptDetail;
+}
+export interface ImportedQuestion {
+  prompt: string;
+  question_type?: QuestionType;
+  options: McOption[] | MatchingOptions;
+  correct_answer: Json;
+  explanation?: string | null;
+  points?: number;
+  topic?: string | null;
+  difficulty?: QuestionDifficulty;
+  learning_objective?: string | null;
+  video_path?: string | null;
+  video_url?: string | null;
+}
+/** Rows become drafts; every row is validated server-side and skipped rows come back with reasons. */
+export async function importQuizQuestions(quizId: string, rows: ImportedQuestion[]): Promise<{ imported: number; skipped: { prompt: string; reason: string }[] }> {
+  return must(await sb().rpc('import_quiz_questions', { p_quiz_id: quizId, p_questions: rows as unknown as Json })) as { imported: number; skipped: { prompt: string; reason: string }[] };
+}
+export async function listQuizGenerationRuns(quizId: string): Promise<QuizGenerationRun[]> {
+  return (must(await sb().rpc('list_quiz_generation_runs', { p_quiz_id: quizId })) as QuizGenerationRun[]) ?? [];
+}
+export class AiNotConfiguredError extends Error {
+  constructor() {
+    super('AI question generation is not configured.');
+    this.name = 'AiNotConfiguredError';
+  }
+}
+/**
+ * Asks the Edge Function to draft questions from approved MCSLI material. Drafts land in the bank
+ * as status "draft" and need a human decision; nothing here is student-visible.
+ */
+export async function generateQuestionDrafts(input: { quizId: string; count: number; difficultyMix?: Partial<Record<QuestionDifficulty, number>>; lessonIds?: string[] | null; includePractice?: boolean }): Promise<{ run_id: string; status: string; generated: number; dropped: number; message?: string }> {
+  const res = await sb().functions.invoke('generate-question-drafts', {
+    body: { quiz_id: input.quizId, requested_count: input.count, difficulty_mix: input.difficultyMix ?? {}, lesson_ids: input.lessonIds ?? null, include_practice: input.includePractice ?? true },
+  });
+  const data = (res.data ?? null) as { run_id?: string; status?: string; generated?: number; dropped?: number; message?: string; error?: string } | null;
+  if (res.error) {
+    const ctx = (res.error as { context?: Response }).context;
+    let body: { error?: string; status?: string; message?: string } | null = null;
+    try {
+      body = ctx ? await ctx.clone().json() : null;
+    } catch {
+      body = null;
+    }
+    if (body?.status === 'not_configured' || ctx?.status === 503) throw new AiNotConfiguredError();
+    throw new Error(body?.message ?? body?.error ?? res.error.message);
+  }
+  if (data?.status === 'not_configured') throw new AiNotConfiguredError();
+  return { run_id: data?.run_id ?? '', status: data?.status ?? 'failed', generated: data?.generated ?? 0, dropped: data?.dropped ?? 0, message: data?.message };
 }
 /** Upload lesson/practice media to the private course-media bucket (admin only via storage RLS). */
 export async function uploadCourseMedia(file: File, prefix: string): Promise<string> {

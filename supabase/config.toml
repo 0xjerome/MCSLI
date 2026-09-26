@@ -450,6 +450,11 @@ verify_jwt = false
 # gateway requires a signed-in user; create_staff_invitation() decides who may invite whom
 verify_jwt = true
 
+[functions.generate-question-drafts]
+# gateway requires a signed-in user; create_quiz_generation_run() decides who may draft for which quiz.
+# Without an AI provider secret (ANTHROPIC_API_KEY) the function answers 503 "not configured".
+verify_jwt = true
+
 [functions.identity-document-url]
 # The gateway rejects requests without a valid user JWT before the function runs;
 # the function then re-checks the caller's role itself.
