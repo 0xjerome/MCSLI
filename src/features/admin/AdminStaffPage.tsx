@@ -42,7 +42,7 @@ export default function AdminStaffPage() {
       const r = await inviteStaff({ email: String(fd.get('email')), fullName: String(fd.get('full_name')), role: fd.get('role') === 'ADMIN' ? 'ADMIN' : 'TRAINER' });
       await invitations.refetch();
       setInviting(false);
-      if (r.email_sent) toast.success('Invitation sent', 'The link is valid for 7 days and can be used once.');
+      if (r.email_sent) toast.success('Invitation sent', 'The link is valid for 24 hours and can be used once.');
       else toast.error('Invitation created, e-mail not sent', r.email_error ?? 'Check the e-mail configuration, then send the invitation again.');
     } catch (err) {
       setError(friendlyError(err, 'invite-staff'));
@@ -118,7 +118,7 @@ export default function AdminStaffPage() {
           )}
         </Card>
         <Card>
-          <CardHeader title="Invitations" description="Pending invitations expire after 7 days. Sending a new invitation to the same address replaces the old link." />
+          <CardHeader title="Invitations" description="Pending invitations expire after 24 hours. Sending a new invitation to the same address replaces the old link." />
           {invitations.isLoading ? (
             <Skeleton lines={4} />
           ) : invitations.isError ? (
@@ -151,7 +151,7 @@ export default function AdminStaffPage() {
                             try {
                               const r = await inviteStaff({ email: i.email, fullName: i.full_name, role: i.role });
                               await invitations.refetch();
-                              if (r.email_sent) toast.success('Invitation resent', 'The previous link was replaced with a new 7-day invitation.');
+                              if (r.email_sent) toast.success('Invitation resent', 'The previous link was replaced with a new 24-hour invitation.');
                               else toast.error('Invitation created, e-mail not sent', r.email_error ?? 'Check the e-mail configuration, then try again.');
                             } catch (err) {
                               toast.error('Not resent', friendlyError(err));
