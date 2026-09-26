@@ -134,7 +134,7 @@ function MediaField({ name, label, defaultValue, prefix, kind }: { name: string;
   const [busy, setBusy] = useState(false);
   return (
     <div className="flex items-end gap-2">
-      <Input name={name} label={label} wrapperClassName="flex-1" value={value} onChange={(e) => setValue(e.target.value)} hint="https:// URL, /public path, or course-media storage path. Upload sets the storage path." optionalLabel />
+      <Input name={name} label={label} wrapperClassName="flex-1" value={value} onChange={(e) => setValue(e.target.value)} hint={kind === 'image' ? 'Upload a JPG/PNG/WebP, or use a direct image URL. Google Drive sharing-page links are not poster images.' : 'https:// URL, /public path, or course-media storage path. Upload sets the storage path.'} optionalLabel />
       <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-ink-300 px-3 text-sm font-semibold text-ink-800 hover:bg-ink-50">
         <Upload className="h-4 w-4" aria-hidden="true" /> {busy ? 'Uploading…' : 'Upload'}
         <input
