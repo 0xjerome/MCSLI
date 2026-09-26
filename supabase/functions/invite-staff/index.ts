@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await asUser.auth.getUser();
   if (userErr || !userData.user) return json(req, { error: 'unauthorised' }, 401);
 
-  const { data: inv, error: invErr } = await asUser.rpc('create_staff_invitation', { p_email: email, p_full_name: fullName, p_role: role });
+  const { data: inv, error: invErr } = await asUser.rpc('create_staff_invitation', { p_email: email, p_full_name: fullName, p_role: role, p_valid_days: 1 });
   if (invErr || !inv?.token) {
     const code = invErr?.code ?? '';
     log('warn', 'invitation_refused', { code });
