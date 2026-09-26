@@ -165,6 +165,7 @@ export const router = createBrowserRouter([
               { path: '/admin/trainers', element: lazyPage(() => import('@/features/admin/AdminTrainersPage')) },
               { path: '/admin/courses', element: lazyPage(() => import('@/features/admin/AdminCoursesPage')) },
               { path: '/admin/courses/:courseId', element: lazyPage(() => import('@/features/admin/AdminCourseEditorPage')) },
+              { path: '/admin/ai-training', element: lazyPage(() => import('@/features/admin/AdminAiTrainingPage')) },
               { path: '/admin/enrollments', element: lazyPage(() => import('@/features/admin/AdminEnrollmentsPage')) },
               { path: '/admin/identity', element: lazyPage(() => import('@/features/admin/AdminIdentityPage')) },
               { path: '/admin/payments', element: lazyPage(() => import('@/features/admin/AdminPaymentsPage')) },
