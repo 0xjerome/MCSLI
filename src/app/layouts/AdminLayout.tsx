@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, UserCog, UserPlus, BookOpen, ClipboardList, ShieldCheck, CreditCard, ClipboardCheck, FileText, Award, MessageSquare, LifeBuoy, Globe, Settings, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, UserPlus, BookOpen, ClipboardList, ShieldCheck, CreditCard, ClipboardCheck, FileText, Award, MessageSquare, LifeBuoy, Globe, Settings, ScrollText, BrainCircuit } from 'lucide-react';
 import { Shell, type NavItem } from './Shell';
 
 const items: NavItem[] = [
@@ -7,6 +7,7 @@ const items: NavItem[] = [
   { label: 'Staff', to: '/admin/staff', icon: UserPlus },
   { label: 'Trainers', to: '/admin/trainers', icon: UserCog },
   { label: 'Courses', to: '/admin/courses', icon: BookOpen },
+  { label: 'AI Training', to: '/admin/ai-training', icon: BrainCircuit },
   { label: 'Enrollments', to: '/admin/enrollments', icon: ClipboardList },
   { label: 'Identity', to: '/admin/identity', icon: ShieldCheck },
   { label: 'Payments', to: '/admin/payments', icon: CreditCard, primary: true },
