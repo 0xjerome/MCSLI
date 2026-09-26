@@ -14,7 +14,8 @@
 //     public.accept_staff_invitation() only for the invited, confirmed address before expiry.
 //
 // The token and the invitee's details are never logged. Secrets are injected by the platform.
-// Required secret: APP_SITE_URL (e.g. https://mcsli.org) – where invitation links point.
+// APP_SITE_URL is retained as a fallback, but production invitations prefer the approved MCSLI
+// browser origin that initiated the request so a stale custom-domain setting cannot break invites.
 // Optional: ALLOWED_ORIGINS (comma separated) to restrict CORS.
 //
 // Request:  POST { "email": "...", "full_name": "...", "role": "ADMIN" | "TRAINER" }
@@ -23,6 +24,30 @@
 //           400 invalid request · 401 not signed in · 403 not permitted · 409 already staff · 500 misconfigured
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const APPROVED_APP_ORIGINS = new Set([
+  'https://mcsli.org',
+  'https://www.mcsli.org',
+  'https://mcsli.vercel.app',
+]);
+
+function normalizeOrigin(value: string | null | undefined): string {
+  return (value ?? '').trim().replace(/\/$/, '');
+}
+
+function invitationSite(req: Request): string | null {
+  const requestOrigin = normalizeOrigin(req.headers.get('Origin'));
+  if (APPROVED_APP_ORIGINS.has(requestOrigin)) return requestOrigin;
+
+  const configured = normalizeOrigin(Deno.env.get('APP_SITE_URL'));
+  if (APPROVED_APP_ORIGINS.has(configured)) return configured;
+
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)) return requestOrigin;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(configured)) return configured;
+
+  // Current production app while the custom-domain cutover is being completed.
+  return 'https://mcsli.vercel.app';
+}
 
 function corsHeaders(req: Request): Record<string, string> {
   const allowed = (Deno.env.get('ALLOWED_ORIGINS') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -61,8 +86,8 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL');
   const anon = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const site = (Deno.env.get('APP_SITE_URL') ?? '').replace(/\/$/, '');
-  if (!url || !anon || !serviceRole || !/^https:\/\/[^/]+$|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(site)) {
+  const site = invitationSite(req);
+  if (!url || !anon || !serviceRole || !site) {
     log('error', 'misconfigured', { site_configured: Boolean(site) });
     return json(req, { error: 'service unavailable' }, 500);
   }
@@ -108,6 +133,6 @@ Deno.serve(async (req) => {
     log('error', 'email_failed', { role, existing_account: Boolean(inv.existing_account), reason: safeEmailError(emailError) });
     return json(req, { invitation_id: inv.invitation_id, email_sent: false, email_error: safeEmailError(emailError) });
   }
-  log('info', 'invitation_sent', { role, existing_account: Boolean(inv.existing_account) });
+  log('info', 'invitation_sent', { role, existing_account: Boolean(inv.existing_account), redirect_host: new URL(site).hostname });
   return json(req, { invitation_id: inv.invitation_id, email_sent: true });
 });
