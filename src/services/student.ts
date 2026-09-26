@@ -84,6 +84,9 @@ export async function listPracticeItems(monthId?: string): Promise<PracticeItem[
 export async function resolveMediaUrl(path: string | null | undefined, url: string | null | undefined, bucket = 'course-media'): Promise<string | null> {
   if (url) return url;
   if (!path) return null;
+  // Admin media fields allow either a private storage path or a public/absolute URL.
+  // Do not send absolute/public URLs to Supabase Storage as object names.
+  if (/^https?:\/\//i.test(path) || path.startsWith('/')) return path;
   const res = await sb().storage.from(bucket).createSignedUrl(path, 60 * 60);
   if (res.error) throw res.error;
   return res.data.signedUrl;
