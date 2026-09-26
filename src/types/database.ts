@@ -165,6 +165,56 @@ export interface PracticeItem {
   is_published: boolean;
 }
 
+export interface AiTrainingAsset {
+  id: string;
+  source_kind: 'lesson' | 'practice';
+  lesson_id: string | null;
+  practice_item_id: string | null;
+  label: string;
+  sign_language: string;
+  media_ref: string;
+  active: boolean;
+  signer_consent_confirmed: boolean;
+  training_rights_confirmed: boolean;
+  quality_status: 'pending' | 'approved' | 'rejected';
+  training_approved: boolean;
+  notes: string | null;
+  created_by: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiTrainingAnnotation {
+  id: string;
+  asset_id: string;
+  annotation_type: string;
+  value: string;
+  start_ms: number | null;
+  end_ms: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_by: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiModelVersion {
+  id: string;
+  name: string;
+  version: string;
+  task: 'isolated_sign_recognition' | 'continuous_sign_recognition' | 'sign_retrieval' | 'sign_generation' | 'content_assistant';
+  status: 'draft' | 'evaluating' | 'approved' | 'retired';
+  dataset_snapshot_at: string | null;
+  metrics: Record<string, Json>;
+  artifact_uri: string | null;
+  notes: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Installment {
   number: number;
   amount: number;
