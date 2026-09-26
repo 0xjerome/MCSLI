@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase';
 import type {
   Assessment, AssessmentAttempt, AuditLog, Certificate, Cohort, Course, CourseMonth, Enrollment, Exam, ExamAttempt, ExamQuestion, IdentityDocument, IdentitySummary,
   Lesson, LessonProgress, Module, MonthOverride, Payment, PaymentMethod, PlatformSettingRow, PracticeItem, Profile, PublicProfile, Quiz, QuizAttempt, QuizQuestion,
+  AiTrainingAsset,
   SiteContentRow, TrainerStats, AdminStats, TrainerAssignment, ContactMessage, EventRow, DiscussionReport, Json,
 } from '@/types/database';
 import type { AccountStatus, AssessmentResult, EnrollmentStatus, IdentityStatus, PaymentStatus, UserRole } from '@/domain/types';
@@ -497,6 +498,35 @@ export async function cancelStaffInvitation(id: string): Promise<void> {
 }
 export async function listStaffAccounts(): Promise<Profile[]> {
   return must(await sb().from('profiles').select('*').in('role', ['SUPER_ADMIN', 'ADMIN', 'TRAINER']).order('role').order('full_name')) as Profile[];
+}
+
+// ---------------------------------------------------------------------------
+// AI training review queue
+// ---------------------------------------------------------------------------
+export async function listAiTrainingAssets(): Promise<AiTrainingAsset[]> {
+  return must(
+    await sb()
+      .from('ai_training_assets')
+      .select('*')
+      .eq('active', true)
+      .order('training_approved', { ascending: true })
+      .order('updated_at', { ascending: false })
+      .limit(1000),
+  ) as AiTrainingAsset[];
+}
+
+export async function reviewAiTrainingAsset(
+  id: string,
+  patch: Partial<Pick<AiTrainingAsset, 'signer_consent_confirmed' | 'training_rights_confirmed' | 'quality_status' | 'training_approved' | 'notes'>>,
+): Promise<void> {
+  const { data } = await sb().auth.getUser();
+  const reviewedBy = data.user?.id ?? null;
+  must(
+    await sb()
+      .from('ai_training_assets')
+      .update({ ...patch, reviewed_by: reviewedBy, updated_at: new Date().toISOString() })
+      .eq('id', id),
+  );
 }
 
 // ---------------------------------------------------------------------------
