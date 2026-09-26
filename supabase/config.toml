@@ -253,24 +253,23 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# MCSLI e-mail templates (supabase/templates/*.html). Supabase refuses template changes on free-tier
-# projects that use the built-in mailer, so these stay disabled until MCSLI's SMTP is configured
-# ([auth.email.smtp] below / Dashboard → Authentication → SMTP). Then uncomment and `config push`.
-# [auth.email.template.confirmation]
-# subject = "Confirm your MCSLI account"
-# content_path = "./supabase/templates/confirmation.html"
-#
-# [auth.email.template.recovery]
-# subject = "Reset your MCSLI password"
-# content_path = "./supabase/templates/recovery.html"
-#
-# [auth.email.template.invite]
-# subject = "You have been invited to MCSLI"
-# content_path = "./supabase/templates/invite.html"
-#
-# [auth.email.template.magic_link]
-# subject = "Your MCSLI sign-in link"
-# content_path = "./supabase/templates/magic_link.html"
+# MCSLI e-mail templates (supabase/templates/*.html). Active on production since custom SMTP
+# (Resend) is connected; Supabase refuses template changes while a project uses its built-in mailer.
+[auth.email.template.confirmation]
+subject = "Confirm your MCSLI account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your MCSLI password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.invite]
+subject = "You have been invited to MCSLI"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Your MCSLI sign-in link"
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

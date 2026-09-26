@@ -1,15 +1,25 @@
 # MCSLI launch runbook
 
 Everything the codebase and the hosted backend can do is done and tested. The steps below need
-MCSLI's own accounts, money or DNS, so they must be done by an MCSLI owner. Follow them **in order**;
-each says exactly where to click and how to check it worked.
+MCSLI's own accounts, money or a phone with an authenticator app, so they must be done by an MCSLI
+owner. Follow them **in order**; each says exactly where to click and how to check it worked.
 
-State on 2026-09-25: Supabase project `midvngbooepderxboqru` (Free plan) fully migrated; Vercel
-project `mcsli/mcsli` (Hobby) auto-deploys `main` to https://mcsli.vercel.app; `mcsli.org` still
-serves the **old** website from an Apache server at 169.58.183.41; Resend team *mcsli* has the
-domain `mcsli.org` added but not verified.
+State on 2026-09-26: DNS points `mcsli.org`/`www.mcsli.org` at Vercel (production deployment of
+`main`); Resend domain `mcsli.org` **verified** and connected to Supabase Auth (confirmation, reset
+and invitation e-mails deliver); `admin@mcsli.org` is SUPER_ADMIN with TOTP; Maurice is ADMIN;
+payment methods entered and enabled; migrations `0001`–`0016` live; **Free plan**; 0 courses.
 
----
+## 0. Open items in one glance
+
+| # | Who | What | Why |
+|---|---|---|---|
+| 1 | Jerome | Vercel → mcsli → Environment Variables: add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (or `VITE_SUPABASE_ANON_KEY`), `VITE_SITE_URL=https://www.mcsli.org`; **remove `RESEND_API_KEY`** from Vercel and put that value in Supabase → Edge Functions → Secrets as `RESEND_API_KEY` | The static frontend has no server side; a Resend key in Vercel is useless there and a leak risk. The site currently runs on the built-in fallback for the production hosts. The dispatcher for payment e-mails needs the key in Supabase. |
+| 2 | Maurice | Profile → Two-factor authentication → *Start set-up* (own phone) | Staff MFA cannot be enforced until every staff account has an authenticator |
+| 3 | Jerome (admin@mcsli.org) | after 2: Admin → Settings → *Require two-factor authentication for staff* → on; then both of you sign in again | Enforced in the database for every staff RPC (tested on the local stack) |
+| 4 | Jerome | Supabase → Billing → **Pro** | daily backups (7 days), 500 GB upload cap instead of 50 MB, leaked-password protection, no pausing |
+| 5 | Jerome | after 4: Storage → Settings → upload limit; Auth → Attack Protection → leaked-password protection on; Vercel `VITE_MAX_UPLOAD_MB` | see §8 |
+| 6 | Jerome | Supabase account → Security → **MFA on**; Organization → Team → second owner | the Supabase login itself is single-factor and single-owner today |
+| 7 | MCSLI trainers/admins | enter the real curriculum and USL videos (§7) | 0 courses – students cannot enroll in anything yet |
 
 ## 1. Vercel environment variables (unblocks the live app)
 
@@ -18,13 +28,18 @@ Vercel → project **mcsli** → Settings → Environment Variables → add for 
 | Name | Value |
 |---|---|
 | `VITE_SUPABASE_URL` | `https://midvngbooepderxboqru.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API Keys → the **anon / publishable** key (public by design; never the `service_role`/secret key) |
-| `VITE_SITE_URL` | `https://mcsli.org` |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → the **publishable** key `sb_publishable_…` (public by design; never the `service_role`/`sb_secret_` key). `VITE_SUPABASE_ANON_KEY` with the legacy anon JWT also works. |
+| `VITE_SITE_URL` | `https://www.mcsli.org` (the host that serves the app; `mcsli.org` redirects to it) |
 | `VITE_MAX_UPLOAD_MB` | `50` on Free; the new Storage limit after step 8 |
 | `VITE_TURNSTILE_SITE_KEY` | only after step 9 |
 
-Then Deployments → latest → ⋯ → **Redeploy**. Check: https://mcsli.vercel.app/login shows the login
-form (not "The learning platform is not connected yet").
+Then Deployments → latest → ⋯ → **Redeploy**. Check: https://www.mcsli.org/login shows the login
+form (not "The learning platform is not connected yet"). Until then the app uses a built-in fallback
+(project URL + publishable key, both public) for `mcsli.org`, `www.mcsli.org`, `learn.mcsli.org` and
+`mcsli.vercel.app` only.
+
+**Remove `RESEND_API_KEY` from Vercel** (it is a secret and the frontend never uses it) and add it
+in Supabase → Edge Functions → Secrets instead; that activates the queued payment e-mails (§3).
 
 ## 2. DNS at Contabo (my.contabo.com → DNS Zone Management → mcsli.org)
 
@@ -65,7 +80,7 @@ Check: Supabase → Authentication → Emails → SMTP shows `smtp.resend.com`; 
 with an inbox you control and the "Confirm your MCSLI account" e-mail arrives from
 `no-reply@mcsli.org`; Resend → Logs shows it *Delivered*.
 
-## 4. First super administrator – admin@mcsli.org
+## 4. First super administrator – admin@mcsli.org (done – kept for reference)
 
 Needs step 1 (a working app URL). Before DNS is switched, use the Vercel URL:
 
@@ -85,11 +100,25 @@ node scripts/invite-first-super-admin.mjs --site https://mcsli.vercel.app   # or
 Check: Admin → Audit log shows `profile.super_admin_bootstrapped` and
 `platform_setting.updated (require_staff_mfa)`.
 
+## 4a. Staff two-factor authentication (Maurice, then enforce)
+
+1. Maurice signs in → Profile → **Two-factor authentication → Start set-up** → scans the QR code
+   with an authenticator app on his own phone → enters the code. (admin@mcsli.org already has it.)
+2. admin@mcsli.org → Admin → Settings → **Require two-factor authentication for staff → on**. Only a
+   super admin in a session that has passed MFA can switch it on, so it cannot lock you out.
+3. Check: each staff member signs out and in again; after the password they are asked for a
+   6-digit code; Admin/Trainer pages load. A staff session without the code sees the challenge
+   screen and – enforced in the database – no staff data.
+4. Lost phone: admin@mcsli.org removes the factor in Supabase → Authentication → Users → the user
+   → MFA factors, the person signs in and enrols again.
+
 ## 5. Invite real staff
 
 Admin → **Staff → Invite staff** (name, e-mail, role). Administrators: only the super admin can
-invite them. Trainers: then Admin → Trainers → *Assign trainer* to course/cohort. Invitations
-expire after 7 days; *Cancel* stops a link immediately.
+invite them. Trainers: then Admin → Trainers → *Assign trainer* to course/cohort. Invitation links
+are valid for **24 hours** and can be used once; *Resend* replaces the link (allowed once per
+minute per address); *Cancel* stops it immediately. The invitee chooses their own password on
+`/accept-invite`; the role is granted only to the invited, confirmed e-mail address.
 
 ## 6. Payment details
 
@@ -108,8 +137,9 @@ checklist on *Settings & fees* is empty.
 * Encode as MP4 (H.264 + AAC), 720p, ~1–1.5 Mbit/s, 2–10 minutes per lesson (≈ 20–110 MB). Students
   on mobile data in Uganda benefit from short lessons; the player never autoplays, loads only metadata
   until play is pressed, and shows the thumbnail as poster.
-* Free plan: 50 MB per upload. After Pro (step 8) raise Supabase → Storage → Settings → *Upload file
-  size limit* (e.g. 500 MB) and `VITE_MAX_UPLOAD_MB`.
+* **Free plan: 50 MB per upload** (verified in Storage → Settings; the bucket's 2 GB limit is capped
+  by the plan). After Pro (step 8) raise Storage → Settings → *Global file size limit* (e.g. 500 MB)
+  and Vercel `VITE_MAX_UPLOAD_MB`.
 * Videos are served from the private `course-media` bucket through 1-hour signed URLs only to students
   whose month is unlocked. Supabase egress counts against the plan (Pro: 250 GB/month included;
   ~3,000 hours of 720p viewing). If viewing grows beyond that, or adaptive streaming (HLS) is needed for
@@ -135,6 +165,15 @@ Supabase → Authentication → Attack Protection → CAPTCHA → Turnstile + th
 in the other order would block sign-ups until the frontend sends tokens.)
 
 ## 10. Final acceptance
+
+Real e-mail delivery to an address you control (creates one banned `[TEST]` account):
+
+```bash
+node scripts/email-delivery-check.mjs you+mcsli-check@gmail.com --site https://www.mcsli.org
+```
+Expect "Confirm your MCSLI account" and "Reset your MCSLI password" from `no-reply@mcsli.org`
+within a minute; Resend → Emails shows both as *Delivered*.
+
 
 Run the hosted end-to-end test and a real e-mail test (an inbox you control), then remove test
 records:

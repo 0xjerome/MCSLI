@@ -139,6 +139,10 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0010_public_endpoints.sql` | rate-limited certificate verification and contact form; public site content serves only verified statistics |
 | `0011_enforce_registration_open.sql` | "Registration open" setting enforced in `enroll_in_course()` |
 | `0012_advisor_fixes.sql` | Supabase security-advisor follow-ups (pinned search_path, no EXECUTE on trigger functions) |
+| `0013_staff_invitations_and_launch_safety.sql` | staff invitations, optional staff MFA enforcement, publish validation, delete protection |
+| `0014_transactional_email_outbox.sql` | payment e-mail queue + dispatcher schedule |
+| `0015_pg_net_schema.sql` | pg_net moved to `extensions` |
+| `0016_advisor_views_and_anon_surface.sql` | definer views → checked functions; anonymous surface reduced to the public catalogue |
 
 **Hosted Supabase** – the production project `midvngbooepderxboqru` (eu-west-1) is linked and all migrations and the Edge Function are deployed; status and remaining steps are in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md). The
 Supabase CLI is a dev dependency, so no global install is needed:

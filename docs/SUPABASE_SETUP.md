@@ -3,17 +3,20 @@
 How this repository's backend is configured, deployed and verified. Everything here refers to
 files in this repo; nothing is generic boilerplate.
 
-**Current status (2026-09-25, final readiness phase)** – launch steps that need MCSLI are in
+**Current status (2026-09-26, security re-audit)** – launch steps that need MCSLI are in
 [LAUNCH_RUNBOOK.md](LAUNCH_RUNBOOK.md).
 
 | Item | Status |
 |---|---|
-| Hosted project | Connected: ref `midvngbooepderxboqru`, eu-west-1 (Ireland), Postgres 17.6, organisation *MasterCLass* (1 member: admin@mcsli.org, Owner). **Free plan** – no backups (verified). |
-| Migrations `0001`–`0015` | Applied with `supabase db push`; local and hosted schemas identical (types regenerated from production). |
-| Edge Functions | `identity-document-url`, `invite-staff`, `email-dispatch` deployed. |
-| Auth | Site URL `https://mcsli.org`; 12 redirect URLs (`/login`, `/reset-password`, `/accept-invite` on `mcsli.org`, `www.`, `learn.` and `mcsli.vercel.app`); 8-char passwords; e-mail confirmation; TOTP MFA; DB SSL enforced. **Production e-mail (Resend SMTP) not yet connected** (§6). |
-| Tests | 63 database tests; E2E 45/45 locally (real e-mails incl. invitations) and 45/45 on the hosted project. Security advisor: only intentional items + *leaked password protection* (Pro-plan feature – enable after the upgrade: Authentication → Attack Protection). |
-| Production data | No legitimate data yet. Test courses, enrollments, files, tickets and payment methods from the E2E runs were deleted; 5 banned + suspended `[TEST]` accounts and their audit rows remain (audit log is immutable). |
+| Hosted project | Connected: ref `midvngbooepderxboqru`, eu-west-1, Postgres 17.6, organisation *MasterCLass* (1 member: admin@mcsli.org, Owner). **Free plan** (verified 2026-09-26): no backups, 50 MB upload cap. |
+| Migrations `0001`–`0016` | Applied with `supabase db push`; production schema identical to local (types regenerated from production). |
+| Edge Functions | `identity-document-url` v3, `invite-staff` v5, `email-dispatch` v2 – deployed sources verified identical to the repository. |
+| Auth | Site URL `https://mcsli.org`; redirect allow-list `https://mcsli.org/**`, `https://www.mcsli.org/**`, `https://learn.mcsli.org/**`, `https://mcsli.vercel.app/**`; e-mail confirmation on; 8-char passwords; OTP/link expiry 24 h (deliberate, see §5); custom SMTP = Resend (`smtp.resend.com:465`, sender `MCSLI <no-reply@mcsli.org>`, 60 s per-address interval); DB SSL enforced. |
+| Accounts | `admin@mcsli.org` SUPER_ADMIN, active, confirmed, **TOTP enrolled**. `maurice.ssenyonjo@mcsli.org` ADMIN, active, confirmed, **no TOTP yet**. `require_staff_mfa = false` (see runbook). |
+| Payments | MCSLI Bank Account (DFCU), MTN MoMo Pay and Airtel Pay configured and **enabled** by the administrator; manual confirmation. |
+| Content | 0 courses, 0 lessons: real curriculum still to be entered by MCSLI. |
+| Tests | 63 database tests; E2E 54/54 on the local stack (incl. TOTP + `require_staff_mfa` enforcement) and 54/54 on the hosted project; security advisor: 0 errors (§7). |
+| Test data | All `[TEST]` courses, files, invitations, messages, queued e-mails and payment methods from test runs are deleted; `[TEST]` accounts remain **banned + suspended** (their audit rows are immutable). |
 
 ## 1. What is in `supabase/`
 
@@ -21,7 +24,7 @@ files in this repo; nothing is generic boilerplate.
 supabase/
   config.toml                       CLI config: auth (e-mail confirmation, 8-char passwords, redirect
                                     URLs, templates), storage, functions, production override block
-  migrations/0001 … 0015            ordered schema history (below)
+  migrations/0001 … 0016            ordered schema history (below)
   functions/identity-document-url   audited short-lived URLs for identity scans
   functions/invite-staff            staff invitation e-mails (ADMIN/TRAINER)
   functions/email-dispatch          sends queued transactional e-mails through Resend
@@ -47,6 +50,7 @@ supabase/
 | `0013_staff_invitations_and_launch_safety` | staff invitations; optional staff MFA enforcement (`require_staff_mfa`); super-admin-only critical settings; bootstrap requires confirmed e-mail; payment methods need details before enabling; publish validation; delete protection for content with student history; lesson/practice thumbnails; course-media MIME whitelist |
 | `0014_transactional_email_outbox` | `email_outbox` + payment e-mail triggers + pg_cron → `email-dispatch` |
 | `0015_pg_net_schema` | pg_net moved to the `extensions` schema (advisor lint) |
+| `0016_advisor_views_and_anon_surface` | definer views → checked SECURITY DEFINER functions; anon table privileges cut to the public catalogue; helper predicates no longer anon RPCs; identity table explicitly closed; 24 h invitations + 60 s per-address throttle |
 
 Database objects after `0012` (identical on the local stack and the hosted project): 36 tables (all with RLS enabled),
 6 views (`identity_summary`, `public_profiles`, `quiz_questions_student`, `exam_questions_student`,
@@ -120,7 +124,9 @@ after filling in `[remotes.production]` (bottom of the file) with the project re
 | Minimum password length | 8 (matches the registration form) |
 | Resend throttle | 60 s |
 | Site URL | `https://mcsli.org` (production), `http://localhost:5173` (local) |
-| Redirect allow-list | `<site>/login`, `<site>/reset-password`, `<site>/accept-invite` for `mcsli.org`, `www.`, `learn.`, `mcsli.vercel.app` (localhost only in the local config) |
+| Redirect allow-list | `https://mcsli.org/**`, `https://www.mcsli.org/**`, `https://learn.mcsli.org/**`, `https://mcsli.vercel.app/**`. Supabase Auth auto-allows only the Site URL host and matches everything else **including the query string**, so exact entries silently sent `/accept-invite?token=…` links on www/vercel back to the site root – hence the `/**` patterns (tested on all three hosts). |
+| OTP / e-mail link expiry | **24 h** (`otp_expiry = 86400`): staff invitation links must live as long as the invitation record. One setting covers confirmation and reset links too; the advisor's "OTP expiry > 1 h" warning is accepted deliberately. |
+| E-mail interval | 60 s per address (dashboard *Minimum interval per user*); `create_staff_invitation()` enforces the same 60 s so a quick *Resend* cannot cancel a working link and then fail to send |
 | DB SSL | enforced for direct Postgres connections (`[remotes.production.db.ssl_enforcement]`) |
 | Templates | `supabase/templates/confirmation.html`, `recovery.html` – **commented out** in `config.toml` until SMTP exists: Supabase rejects template changes on free-tier projects using the built-in mailer |
 | MFA | TOTP enrol/verify enabled (hosted default kept) |
@@ -211,12 +217,19 @@ functions that re-check the caller and write `audit_logs`.
 11. Reissuing a revoked certificate skipped eligibility; ADMINs could suspend SUPER_ADMINs; an
     autosave after the exam deadline rolled back the automatic submission. → fixed.
 
-**Supabase security advisor on the hosted project (after `0012`):** 0 unexpected findings. Remaining
-items are intentional: 4 × `security_definer_view` (the four filtered views listed in `0012` – the base
-tables deny direct reads, so they cannot be invoker views), 76 × `*_security_definer_function_executable`
-(exactly the EXECUTE whitelist; each function re-checks the caller), and 194 performance
-warnings (`auth_rls_initplan`, `multiple_permissive_policies`) that are negligible at MCSLI's scale; revisit
-by wrapping `auth.uid()` as `(select auth.uid())` if query volume grows.
+**Supabase security advisor on the hosted project (re-run 2026-09-26 after `0016`): 0 errors.**
+Every remaining item, classified:
+
+| Finding | Count | Classification |
+|---|---|---|
+| `security_definer_view` (public_profiles, identity_summary, exam_attempts_student, site_content_public) | 0 | **Fixed** – views dropped; replaced by `public_profiles_lookup(ids)`, `get_my_identity()`, `admin_list_identities(status)`, `my_exam_attempts(enrollment)`, `get_site_content_public()` – SECURITY DEFINER functions with explicit `auth.uid()`/role checks. `security_invoker = true` was not possible: the base tables deny direct reads (identity_verifications) or hide columns (exam scores), which is the point. |
+| Excessive grants on views (INSERT/UPDATE/DELETE for anon/authenticated) | 0 | **Fixed** – the two remaining invoker views are SELECT-only for `authenticated`. |
+| `anon_security_definer_function_executable` | 5 | **Intentional and safe**: `verify_certificate` (public, minimal fields, rate limited), `get_public_settings` (public subset), `get_site_content_public` (public content, unverified stats stripped), `is_admin`/`is_staff` (must stay callable by anon because the RLS policies of the public catalogue tables evaluate them; both return only a boolean about the caller). All other helpers lost anon EXECUTE; anon also lost all table privileges except SELECT on `courses`/`course_months`/`events` and INSERT on `contact_messages`, and new tables fail closed. |
+| `authenticated_security_definer_function_executable` | 67 | **Intentional**: this is the application's RPC surface. Each function re-checks `auth.uid()`, role/ownership and (where relevant) staff MFA internally, pins `search_path`, never trusts `user_metadata`, and audits sensitive actions. Purely internal helpers (`current_user_role`, `staff_mfa_satisfied`, `mask_identifier`, `fn_build_installments`, `fn_*` internals) are not executable by API roles. |
+| `rls_enabled_no_policy` on `identity_verifications` | – | **Intentional** (documented on the table): no policies and no API-role grants; the encrypted numbers are reachable only through the audited functions. |
+| `auth_otp_long_expiry` | 1 | **Intentional**: 24 h link validity for staff invitations (§5). |
+| `auth_leaked_password_protection` | 1 | **External/provider limitation**: HaveIBeenPwned checks are a Pro-plan feature; enable after the upgrade. |
+| `auth_rls_initplan`, `multiple_permissive_policies` | 194 | **Performance only**, negligible at MCSLI's scale. |
 
 **Role matrix (enforced in SQL, tested as each role):**
 
@@ -398,8 +411,8 @@ refuses hosted projects unless `E2E_ALLOW_REMOTE=1` and cleans up after itself.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build      # frontend + domain
-TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 63 SQL tests
-npx supabase start && npm run test:e2e                               # 45-step HTTP end-to-end
+TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/mcsli_test npm run test:db   # 63 SQL tests (business rules + negative security)
+npx supabase start && npm run test:e2e                               # 54-step HTTP end-to-end (real e-mails, TOTP, MFA enforcement)
 npm run db:types                                                     # regenerate src/types/supabase.generated.ts
 ```
 
