@@ -34,6 +34,9 @@ export const schemaContract: {
   identity_documents: KeysExist<M.IdentityDocument, Row<'identity_documents'>>;
   courses: KeysExist<M.Course, Row<'courses'>>;
   cohorts: KeysExist<M.Cohort, Row<'cohorts'>>;
+  cohort_questions: KeysExist<M.CohortQuestion, Row<'cohort_questions'>>;
+  cohort_applications: KeysExist<M.CohortApplication, Row<'cohort_applications'>>;
+  cohort_application_events: KeysExist<M.CohortApplicationEvent, Row<'cohort_application_events'>>;
   trainer_assignments: KeysExist<M.TrainerAssignment, Row<'trainer_assignments'>>;
   course_months: KeysExist<M.CourseMonth, Row<'course_months'>>;
   modules: KeysExist<M.Module, Row<'modules'>>;
@@ -78,6 +81,9 @@ export const schemaContract: {
   identity_documents: true,
   courses: true,
   cohorts: true,
+  cohort_questions: true,
+  cohort_applications: true,
+  cohort_application_events: true,
   trainer_assignments: true,
   course_months: true,
   modules: true,
@@ -133,4 +139,7 @@ export const rpcContract: Fn[] = [
   'start_quiz_attempt', 'get_quiz_attempt', 'save_quiz_answers', 'practice_questions', 'check_practice_answer', 'my_topic_progress',
   'get_quiz_publish_problems', 'review_quiz_question', 'preview_quiz_selection', 'staff_quiz_stats', 'staff_question_stats',
   'staff_quiz_attempt_detail', 'import_quiz_questions', 'list_quiz_generation_runs', 'create_quiz_generation_run', 'complete_quiz_generation_run',
+  'public_cohorts', 'public_cohort', 'submit_cohort_application', 'verify_cohort_application', 'my_cohort_applications', 'my_enrollable_cohorts',
+  'review_cohort_application', 'set_cohort_application_notes', 'assign_application_enrollment', 'set_cohort_applications_open', 'mark_cohort_completed',
+  'staff_cohort_stats', 'copy_cohort_questions', 'seed_default_cohort_questions', 'import_cohort_applications', 'send_cohort_start_reminder',
 ];

@@ -514,33 +514,322 @@ export type Database = {
           },
         ]
       }
-      cohorts: {
+      cohort_application_events: {
         Row: {
-          course_id: string
+          actor_id: string | null
+          application_id: string
           created_at: string
-          end_date: string | null
+          from_status: string | null
           id: string
-          is_open: boolean
-          name: string
-          start_date: string | null
+          note: string | null
+          to_status: string
         }
         Insert: {
-          course_id: string
+          actor_id?: string | null
+          application_id: string
           created_at?: string
-          end_date?: string | null
+          from_status?: string | null
           id?: string
-          is_open?: boolean
-          name: string
-          start_date?: string | null
+          note?: string | null
+          to_status: string
         }
         Update: {
+          actor_id?: string | null
+          application_id?: string
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          note?: string | null
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cohort_application_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cohort_application_events_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "cohort_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cohort_applications: {
+        Row: {
+          answers: Json
+          cohort_id: string
+          consent_accepted_at: string | null
+          created_at: string
+          delivery_mode: string
+          email: string
+          email_verified_at: string | null
+          enrollment_id: string | null
+          external_ref: string | null
+          full_name: string
+          id: string
+          internal_notes: string | null
+          phone: string | null
+          reference: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          status: string
+          submitted_at: string
+          updated_at: string
+          user_id: string | null
+          verify_token_hash: string | null
+        }
+        Insert: {
+          answers?: Json
+          cohort_id: string
+          consent_accepted_at?: string | null
+          created_at?: string
+          delivery_mode: string
+          email: string
+          email_verified_at?: string | null
+          enrollment_id?: string | null
+          external_ref?: string | null
+          full_name: string
+          id?: string
+          internal_notes?: string | null
+          phone?: string | null
+          reference: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string | null
+          verify_token_hash?: string | null
+        }
+        Update: {
+          answers?: Json
+          cohort_id?: string
+          consent_accepted_at?: string | null
+          created_at?: string
+          delivery_mode?: string
+          email?: string
+          email_verified_at?: string | null
+          enrollment_id?: string | null
+          external_ref?: string | null
+          full_name?: string
+          id?: string
+          internal_notes?: string | null
+          phone?: string | null
+          reference?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string | null
+          verify_token_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cohort_applications_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "cohorts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cohort_applications_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cohort_applications_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cohort_applications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cohort_questions: {
+        Row: {
+          cohort_id: string
+          created_at: string
+          help_text: string | null
+          id: string
+          is_active: boolean
+          is_sensitive: boolean
+          key: string
+          label: string
+          options: Json
+          position: number
+          question_type: string
+          required: boolean
+          updated_at: string
+        }
+        Insert: {
+          cohort_id: string
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          is_sensitive?: boolean
+          key: string
+          label: string
+          options?: Json
+          position?: number
+          question_type: string
+          required?: boolean
+          updated_at?: string
+        }
+        Update: {
+          cohort_id?: string
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          is_sensitive?: boolean
+          key?: string
+          label?: string
+          options?: Json
+          position?: number
+          question_type?: string
+          required?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cohort_questions_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "cohorts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cohorts: {
+        Row: {
+          announcement_url: string | null
+          application_deadline: string | null
+          application_opens_at: string | null
+          auto_accept: boolean
+          capacity: number | null
+          certificate_description: string | null
+          cohort_number: number | null
+          completion_summary: string | null
+          course_id: string
+          created_at: string
+          currency: string
+          delivery_mode: string
+          description: string | null
+          eligibility: string | null
+          end_date: string | null
+          fallback_form_url: string | null
+          hero_image_path: string | null
+          id: string
+          is_featured: boolean
+          is_open: boolean
+          is_published: boolean
+          name: string
+          online_details: string | null
+          physical_location: string | null
+          registration_fee: number | null
+          schedule_notes: string | null
+          slug: string | null
+          sources: Json
+          start_date: string | null
+          status_override: string | null
+          tagline: string | null
+          tuition_online: number | null
+          tuition_physical: number | null
+          updated_at: string
+          verified_participant_count: number | null
+        }
+        Insert: {
+          announcement_url?: string | null
+          application_deadline?: string | null
+          application_opens_at?: string | null
+          auto_accept?: boolean
+          capacity?: number | null
+          certificate_description?: string | null
+          cohort_number?: number | null
+          completion_summary?: string | null
+          course_id: string
+          created_at?: string
+          currency?: string
+          delivery_mode?: string
+          description?: string | null
+          eligibility?: string | null
+          end_date?: string | null
+          fallback_form_url?: string | null
+          hero_image_path?: string | null
+          id?: string
+          is_featured?: boolean
+          is_open?: boolean
+          is_published?: boolean
+          name: string
+          online_details?: string | null
+          physical_location?: string | null
+          registration_fee?: number | null
+          schedule_notes?: string | null
+          slug?: string | null
+          sources?: Json
+          start_date?: string | null
+          status_override?: string | null
+          tagline?: string | null
+          tuition_online?: number | null
+          tuition_physical?: number | null
+          updated_at?: string
+          verified_participant_count?: number | null
+        }
+        Update: {
+          announcement_url?: string | null
+          application_deadline?: string | null
+          application_opens_at?: string | null
+          auto_accept?: boolean
+          capacity?: number | null
+          certificate_description?: string | null
+          cohort_number?: number | null
+          completion_summary?: string | null
           course_id?: string
           created_at?: string
+          currency?: string
+          delivery_mode?: string
+          description?: string | null
+          eligibility?: string | null
           end_date?: string | null
+          fallback_form_url?: string | null
+          hero_image_path?: string | null
           id?: string
+          is_featured?: boolean
           is_open?: boolean
+          is_published?: boolean
           name?: string
+          online_details?: string | null
+          physical_location?: string | null
+          registration_fee?: number | null
+          schedule_notes?: string | null
+          slug?: string | null
+          sources?: Json
           start_date?: string | null
+          status_override?: string | null
+          tagline?: string | null
+          tuition_online?: number | null
+          tuition_physical?: number | null
+          updated_at?: string
+          verified_participant_count?: number | null
         }
         Relationships: [
           {
@@ -852,6 +1141,7 @@ export type Database = {
         Row: {
           author_id: string
           body: string
+          cohort_id: string | null
           course_id: string
           created_at: string
           hidden_by: string | null
@@ -867,6 +1157,7 @@ export type Database = {
         Insert: {
           author_id: string
           body: string
+          cohort_id?: string | null
           course_id: string
           created_at?: string
           hidden_by?: string | null
@@ -882,6 +1173,7 @@ export type Database = {
         Update: {
           author_id?: string
           body?: string
+          cohort_id?: string | null
           course_id?: string
           created_at?: string
           hidden_by?: string | null
@@ -900,6 +1192,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_threads_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "cohorts"
             referencedColumns: ["id"]
           },
           {
@@ -992,6 +1291,7 @@ export type Database = {
           course_id: string
           created_at: string
           currency: string
+          delivery_mode: string | null
           final_approved_at: string | null
           final_approved_by: string | null
           id: string
@@ -1011,6 +1311,7 @@ export type Database = {
           course_id: string
           created_at?: string
           currency: string
+          delivery_mode?: string | null
           final_approved_at?: string | null
           final_approved_by?: string | null
           id?: string
@@ -1030,6 +1331,7 @@ export type Database = {
           course_id?: string
           created_at?: string
           currency?: string
+          delivery_mode?: string | null
           final_approved_at?: string | null
           final_approved_by?: string | null
           id?: string
@@ -2867,6 +3169,10 @@ export type Database = {
         Args: { p_enrollment_id: string }
         Returns: undefined
       }
+      assign_application_enrollment: {
+        Args: { p_application_id: string; p_enrollment_id: string }
+        Returns: Json
+      }
       authorize_identity_document_access: {
         Args: { p_document_id: string }
         Returns: string
@@ -2932,6 +3238,10 @@ export type Database = {
         }
         Returns: Json
       }
+      copy_cohort_questions: {
+        Args: { p_from_cohort: string; p_to_cohort: string }
+        Returns: number
+      }
       create_quiz_generation_run: {
         Args: {
           p_difficulty_mix?: Json
@@ -2989,6 +3299,14 @@ export type Database = {
       fn_certificate_eligibility: {
         Args: { p_enrollment_id: string }
         Returns: Json
+      }
+      fn_cohort_applications_state: {
+        Args: { c: Database["public"]["Tables"]["cohorts"]["Row"] }
+        Returns: string
+      }
+      fn_cohort_phase: {
+        Args: { c: Database["public"]["Tables"]["cohorts"]["Row"] }
+        Returns: string
       }
       fn_confirmed_totals: {
         Args: { p_enrollment_id: string }
@@ -3105,6 +3423,10 @@ export type Database = {
         }
         Returns: Json
       }
+      import_cohort_applications: {
+        Args: { p_cohort_id: string; p_dry_run?: boolean; p_rows: Json }
+        Returns: Json
+      }
       import_quiz_questions: {
         Args: { p_questions: Json; p_quiz_id: string }
         Returns: Json
@@ -3166,6 +3488,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      mark_cohort_completed: {
+        Args: {
+          p_cohort_id: string
+          p_participants?: number
+          p_summary?: string
+        }
+        Returns: undefined
+      }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
       mask_identifier: { Args: { p: string }; Returns: string }
       moderate_discussion: {
@@ -3178,6 +3508,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      my_cohort_applications: { Args: never; Returns: Json[] }
+      my_enrollable_cohorts: { Args: { p_course_id: string }; Returns: Json[] }
       my_exam_attempts: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -3218,6 +3550,8 @@ export type Database = {
         Returns: Json
       }
       preview_quiz_selection: { Args: { p_quiz_id: string }; Returns: Json }
+      public_cohort: { Args: { p_slug: string }; Returns: Json }
+      public_cohorts: { Args: never; Returns: Json[] }
       public_profiles_lookup: {
         Args: { p_ids: string[] }
         Returns: {
@@ -3255,6 +3589,10 @@ export type Database = {
         Returns: string
       }
       release_exam_results: { Args: { p_exam_id: string }; Returns: number }
+      review_cohort_application: {
+        Args: { p_application_id: string; p_decision: string; p_note?: string }
+        Returns: Json
+      }
       review_identity: {
         Args: {
           p_decision: Database["public"]["Enums"]["identity_status"]
@@ -3309,6 +3647,22 @@ export type Database = {
         }
         Returns: string
       }
+      seed_default_cohort_questions: {
+        Args: { p_cohort_id: string }
+        Returns: number
+      }
+      send_cohort_start_reminder: {
+        Args: { p_cohort_id: string; p_message?: string }
+        Returns: number
+      }
+      set_cohort_application_notes: {
+        Args: { p_application_id: string; p_notes: string }
+        Returns: undefined
+      }
+      set_cohort_applications_open: {
+        Args: { p_cohort_id: string; p_open: boolean }
+        Returns: undefined
+      }
       set_platform_setting: {
         Args: { p_key: string; p_value: Json }
         Returns: undefined
@@ -3317,6 +3671,7 @@ export type Database = {
         Args: { p_key: string; p_public?: boolean; p_value: Json }
         Returns: undefined
       }
+      staff_cohort_stats: { Args: { p_cohort_id: string }; Returns: Json }
       staff_exam_attempts: {
         Args: { p_enrollment_id?: string; p_exam_id?: string }
         Returns: {
@@ -3428,6 +3783,19 @@ export type Database = {
       start_exam_attempt: { Args: { p_exam_id: string }; Returns: Json }
       start_quiz_attempt: { Args: { p_quiz_id: string }; Returns: Json }
       storage_path_owner: { Args: { p_name: string }; Returns: boolean }
+      submit_cohort_application: {
+        Args: {
+          p_answers?: Json
+          p_consent?: boolean
+          p_delivery_mode: string
+          p_email: string
+          p_full_name: string
+          p_phone: string
+          p_slug: string
+          p_website?: string
+        }
+        Returns: Json
+      }
       submit_exam_attempt: { Args: { p_attempt_id: string }; Returns: Json }
       submit_identity: {
         Args: {
@@ -3475,6 +3843,7 @@ export type Database = {
         Returns: undefined
       }
       verify_certificate: { Args: { p_number: string }; Returns: Json }
+      verify_cohort_application: { Args: { p_token: string }; Returns: Json }
     }
     Enums: {
       account_status: "active" | "suspended"

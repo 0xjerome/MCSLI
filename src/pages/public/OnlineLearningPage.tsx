@@ -6,6 +6,7 @@ import { formatUGX } from '@/lib/utils';
 import { listPublishedCourses, fallbackCourseFees } from '@/services/public';
 import { useSiteContent } from '@/content/useSiteContent';
 import { Section, PageHero, CtaBand } from '@/components/public/Sections';
+import { CurrentCohort } from '@/components/public/CurrentCohort';
 import { SectionHeader } from '@/components/ui/Misc';
 import { ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -58,6 +59,7 @@ export default function OnlineLearningPage() {
           </ButtonLink>
         </div>
       </PageHero>
+      <CurrentCohort />
 
       <Section>
         <SectionHeader eyebrow="How the course works" title="Progress one month at a time" description="Every month must be completed — lessons, quizzes and a trainer assessment — before the next one opens. It keeps the learning honest and the certificate meaningful." />

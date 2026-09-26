@@ -628,6 +628,45 @@ await step('course media: signed URLs only for unlocked months, only for enrolle
   const listed = ok(await ctx.student.client.storage.from('course-media').list(`lessons/${RUN}`), 'list');
   assert(!listed.some((f) => f.name === 'm2.mp4'), 'locked media is not even listed');
 });
+await step('cohorts: published intake visible to visitors; native application with reference + confirmation e-mail; duplicates, deadline and RLS enforced; admin review', async () => {
+  const a = ctx.admin.client;
+  const cohort = ok(await a.from('cohorts').insert({ course_id: ctx.course.id, name: `[TEST] Cohort ${RUN}`, delivery_mode: 'hybrid', is_open: true, is_published: true, is_featured: true, application_deadline: new Date(Date.now() + 86_400_000).toISOString(), registration_fee: 20000, tuition_online: 350000, tuition_physical: 300000 }).select().single(), 'cohort');
+  ctx.cohort = cohort;
+  assert(ok(await a.rpc('seed_default_cohort_questions', { p_cohort_id: cohort.id })) === 17, 'default questions seeded');
+  const pub = ok(await anon.rpc('public_cohorts'), 'public cohorts');
+  const mine = pub.find((c) => c.id === cohort.id);
+  assert(mine && mine.applications === 'open' && mine.phase === 'upcoming' && !('is_open' in mine) && !('auto_accept' in mine), 'visitors see the published cohort with derived status and public fields only');
+  const detail = ok(await anon.rpc('public_cohort', { p_slug: cohort.slug }), 'public cohort');
+  assert(detail.questions.length === 17, 'application questions are delivered to the form');
+  assert((await anon.from('cohorts').select('id')).error && (await anon.from('cohort_applications').select('id')).error, 'cohort tables are closed to anonymous REST access');
+  const answers = { age_group: '25 - 30 years', residence: 'Uganda, Kampala', nationality: 'Ugandan', heard_before: 'Yes', motivation: '[TEST] motivation', plans: '[TEST] plans' };
+  const applicant = email('applicant');
+  const payload = { p_slug: cohort.slug, p_full_name: '[TEST] Applicant', p_email: applicant, p_phone: '0700000001', p_delivery_mode: 'online', p_answers: answers, p_consent: true, p_website: null };
+  const receipt = ok(await anon.rpc('submit_cohort_application', payload), 'apply');
+  assert(/^MCSLI-CX-\d{4}-000001$/.test(receipt.reference) && receipt.status === 'submitted' && receipt.email_verification_required === true, 'reference issued, e-mail confirmation required');
+  const dup = await anon.rpc('submit_cohort_application', { ...payload, p_email: applicant.toUpperCase() });
+  assert(dup.error && /already exists/.test(dup.error.message), 'duplicate application refused');
+  const missing = await anon.rpc('submit_cohort_application', { ...payload, p_email: email('applicant2'), p_answers: { ...answers, motivation: '' } });
+  assert(missing.error && /Please answer/.test(missing.error.message), 'required questions enforced server-side');
+  const outbox = ok(await a.from('email_outbox').select('template, subject, to_email, payload').eq('entity_id', receipt.application_id), 'outbox');
+  assert(outbox.length === 1 && outbox[0].template === 'cohort_application_received' && outbox[0].subject.includes(receipt.reference) && !JSON.stringify(outbox[0].payload).includes('[TEST] motivation'), 'branded confirmation e-mail queued without answers');
+  const studentView = await ctx.student.client.from('cohort_applications').select('id');
+  assert(studentView.error || studentView.data.length === 0, 'students cannot list applications');
+  assert((await ctx.student.client.rpc('review_cohort_application', { p_application_id: receipt.application_id, p_decision: 'accept' })).error, 'students cannot accept applications');
+  assert((await ctx.trainer.client.rpc('review_cohort_application', { p_application_id: receipt.application_id, p_decision: 'accept' })).error, 'trainers cannot review applications');
+  ok(await a.rpc('review_cohort_application', { p_application_id: receipt.application_id, p_decision: 'accept', p_note: '[TEST] welcome' }), 'accept');
+  const app = ok(await a.from('cohort_applications').select('status, reviewed_by, reviewed_at').eq('id', receipt.application_id).single(), 'application');
+  assert(app.status === 'accepted' && app.reviewed_by && app.reviewed_at, 'accepted with reviewer recorded');
+  const accepted = ok(await a.from('email_outbox').select('template').eq('entity_id', receipt.application_id), 'outbox after accept');
+  assert(accepted.some((m) => m.template === 'cohort_application_accepted'), 'acceptance e-mail queued');
+  ok(await a.rpc('set_cohort_applications_open', { p_cohort_id: cohort.id, p_open: false }), 'close applications');
+  const closed = await anon.rpc('submit_cohort_application', { ...payload, p_email: email('applicant3') });
+  assert(closed.error && /closed/.test(closed.error.message), 'closed cohort refuses applications server-side');
+  const stats = ok(await a.rpc('staff_cohort_stats', { p_cohort_id: cohort.id }), 'stats');
+  assert(stats.applications === 1 && stats.accepted === 1 && stats.enrolled === 0, 'cohort stats');
+  const dry = ok(await a.rpc('import_cohort_applications', { p_cohort_id: cohort.id, p_rows: [{ full_name: '[TEST] Legacy', email: email('legacy'), delivery_mode: 'physical' }, { full_name: '[TEST] Dup', email: applicant, delivery_mode: 'online' }], p_dry_run: true }), 'import dry run');
+  assert(dry.dry_run && dry.importable === 1 && dry.duplicates.length === 1 && dry.imported === 0, 'importer dry run detects duplicates without writing');
+});
 await step('quiz: server-selected snapshot; bank and answers hidden; failed attempt reveals nothing; pass scored server-side', async () => {
   const s = ctx.student.client;
   const direct = await s.from('quiz_questions').select('correct_answer').eq('quiz_id', ctx.quiz.id);
@@ -991,6 +1030,9 @@ await step('remove [TEST] course, files, invitations, messages and payment metho
   const ids = all.map((u) => u.id);
   if (ctx.course) {
     ok(await service.from('enrollments').delete().eq('course_id', ctx.course.id), 'enrollments');
+    // cohort applications block cohort deletion by design (history is kept); remove the [TEST] ones first
+    const testCohorts = ok(await service.from('cohorts').select('id').eq('course_id', ctx.course.id), 'cohorts');
+    if (testCohorts.length) ok(await service.from('cohort_applications').delete().in('cohort_id', testCohorts.map((c) => c.id)), 'cohort applications');
     ok(await service.from('courses').delete().eq('id', ctx.course.id), 'course');
   }
   if (ctx.method) ok(await service.from('payment_methods').delete().eq('id', ctx.method.id), 'payment method');

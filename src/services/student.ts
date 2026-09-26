@@ -1,6 +1,6 @@
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Assessment, AssessmentAttempt, Certificate, Course, CourseMapMonth, CourseMonth, Enrollment, Exam, ExamAttemptStudent, ExamQuestionStudent,
+  Assessment, AssessmentAttempt, Certificate, Cohort, Course, CourseMapMonth, CourseMonth, Enrollment, Exam, ExamAttemptStudent, ExamQuestionStudent, MyCohortApplication, PublicCohort,
   Lesson, LessonProgress, LessonResource, Module, MonthOverride, PracticeItem, PracticeFeedback, PracticeQuestion, Quiz, QuizAttempt, QuizAttemptStart, QuizResult, TopicProgress, Json, Profile,
 } from '@/types/database';
 import type { PaymentPlanType } from '@/domain/types';
@@ -144,6 +144,23 @@ export async function checkPracticeAnswer(questionId: string, answer: Json): Pro
 
 export async function getTopicProgress(enrollmentId: string): Promise<TopicProgress[]> {
   return (must(await sb().rpc('my_topic_progress', { p_enrollment_id: enrollmentId })) as TopicProgress[]) ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Cohorts (the student's intake) and their own cohort applications
+// ---------------------------------------------------------------------------
+export async function getMyCohort(cohortId: string): Promise<Cohort | null> {
+  return must(await sb().from('cohorts').select('*').eq('id', cohortId).maybeSingle()) as Cohort | null;
+}
+
+/** Own applications (links any made before the account existed, by e-mail). */
+export async function listMyCohortApplications(): Promise<MyCohortApplication[]> {
+  return (must(await sb().rpc('my_cohort_applications')) as MyCohortApplication[]) ?? [];
+}
+
+/** Cohorts this student may enroll into for a course: open intakes + the cohort that accepted them. */
+export async function listEnrollableCohorts(courseId: string): Promise<(PublicCohort & { accepted: boolean })[]> {
+  return (must(await sb().rpc('my_enrollable_cohorts', { p_course_id: courseId })) as (PublicCohort & { accepted: boolean })[]) ?? [];
 }
 
 // ---------------------------------------------------------------------------

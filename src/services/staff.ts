@@ -1,7 +1,7 @@
 import { getSupabase } from '@/lib/supabase';
 import type {
   Assessment, AssessmentAttempt, AuditLog, Certificate, Cohort, Course, CourseMonth, Enrollment, Exam, ExamAttempt, ExamQuestion, IdentityDocument, IdentitySummary,
-  Lesson, LessonProgress, Module, MonthOverride, Payment, PaymentMethod, PlatformSettingRow, PracticeItem, Profile, PublicProfile, Quiz, QuizAttempt, QuizQuestion, QuizAttemptDetail, QuizGenerationRun, QuizSelectionPreview, QuizStats, QuestionStats, QuestionDifficulty, QuestionType, McOption, MatchingOptions,
+  Lesson, LessonProgress, Module, MonthOverride, Payment, PaymentMethod, PlatformSettingRow, PracticeItem, Profile, PublicProfile, Quiz, QuizAttempt, QuizQuestion, QuizAttemptDetail, QuizGenerationRun, QuizSelectionPreview, QuizStats, QuestionStats, QuestionDifficulty, QuestionType, McOption, MatchingOptions, CohortQuestion, CohortApplication, CohortApplicationEvent, CohortApplicationStatus, CohortStats, CohortImportResult,
   AiTrainingAsset,
   SiteContentRow, TrainerStats, AdminStats, TrainerAssignment, ContactMessage, EventRow, DiscussionReport, Json,
 } from '@/types/database';
@@ -306,6 +306,88 @@ export async function saveQuizQuestion(q: Partial<QuizQuestion> & { id?: string 
 export async function deleteQuizQuestion(id: string): Promise<void> {
   must(await sb().from('quiz_questions').delete().eq('id', id));
 }
+// ---------------------------------------------------------------------------
+// Cohorts: settings, application questions, applications review, import (admin)
+// ---------------------------------------------------------------------------
+export async function listCohortsAdmin(): Promise<(Cohort & { course: Pick<Course, 'id' | 'title' | 'slug'> | null })[]> {
+  return must(await sb().from('cohorts').select('*, course:courses(id, title, slug)').order('cohort_number', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })) as (Cohort & { course: Pick<Course, 'id' | 'title' | 'slug'> | null })[];
+}
+export async function getCohortAdmin(id: string): Promise<(Cohort & { course: Pick<Course, 'id' | 'title' | 'slug'> | null }) | null> {
+  return must(await sb().from('cohorts').select('*, course:courses(id, title, slug)').eq('id', id).maybeSingle()) as (Cohort & { course: Pick<Course, 'id' | 'title' | 'slug'> | null }) | null;
+}
+export async function saveCohortDetails(c: Partial<Cohort> & { id?: string }): Promise<string> {
+  if (c.id) {
+    const { id, ...rest } = c;
+    must(await sb().from('cohorts').update(rest).eq('id', id));
+    return id;
+  }
+  return (must(await sb().from('cohorts').insert(c).select('id').single()) as { id: string }).id;
+}
+export async function setCohortApplicationsOpen(cohortId: string, open: boolean): Promise<void> {
+  must(await sb().rpc('set_cohort_applications_open', { p_cohort_id: cohortId, p_open: open }));
+}
+export async function markCohortCompleted(cohortId: string, summary?: string | null, participants?: number | null): Promise<void> {
+  must(await sb().rpc('mark_cohort_completed', { p_cohort_id: cohortId, p_summary: summary ?? null, p_participants: participants ?? null }));
+}
+export async function getCohortStats(cohortId: string): Promise<CohortStats> {
+  return must(await sb().rpc('staff_cohort_stats', { p_cohort_id: cohortId })) as CohortStats;
+}
+export async function listCohortQuestions(cohortId: string): Promise<CohortQuestion[]> {
+  return must(await sb().from('cohort_questions').select('*').eq('cohort_id', cohortId).order('position').order('created_at')) as CohortQuestion[];
+}
+export async function saveCohortQuestion(q: Partial<CohortQuestion> & { id?: string }): Promise<void> {
+  if (q.id) {
+    const { id, ...rest } = q;
+    must(await sb().from('cohort_questions').update(rest).eq('id', id));
+  } else must(await sb().from('cohort_questions').insert(q));
+}
+export async function deleteCohortQuestion(id: string): Promise<void> {
+  must(await sb().from('cohort_questions').delete().eq('id', id));
+}
+export async function seedDefaultCohortQuestions(cohortId: string): Promise<number> {
+  return (must(await sb().rpc('seed_default_cohort_questions', { p_cohort_id: cohortId })) as number) ?? 0;
+}
+export async function copyCohortQuestions(fromCohortId: string, toCohortId: string): Promise<number> {
+  return (must(await sb().rpc('copy_cohort_questions', { p_from_cohort: fromCohortId, p_to_cohort: toCohortId })) as number) ?? 0;
+}
+export async function listCohortApplications(cohortId: string, status?: CohortApplicationStatus | null): Promise<CohortApplication[]> {
+  let q = sb().from('cohort_applications').select('*').eq('cohort_id', cohortId).order('submitted_at', { ascending: false }).limit(1000);
+  if (status) q = q.eq('status', status);
+  return must(await q) as CohortApplication[];
+}
+export async function getCohortApplication(id: string): Promise<(CohortApplication & { events: CohortApplicationEvent[] }) | null> {
+  const app = must(await sb().from('cohort_applications').select('*').eq('id', id).maybeSingle()) as CohortApplication | null;
+  if (!app) return null;
+  const events = must(await sb().from('cohort_application_events').select('*').eq('application_id', id).order('created_at')) as CohortApplicationEvent[];
+  return { ...app, events };
+}
+export type CohortReviewDecision = 'review' | 'accept' | 'waitlist' | 'reject' | 'reopen' | 'withdraw';
+export async function reviewCohortApplication(id: string, decision: CohortReviewDecision, note?: string | null): Promise<void> {
+  must(await sb().rpc('review_cohort_application', { p_application_id: id, p_decision: decision, p_note: note ?? null }));
+}
+export async function setCohortApplicationNotes(id: string, notes: string): Promise<void> {
+  must(await sb().rpc('set_cohort_application_notes', { p_application_id: id, p_notes: notes }));
+}
+export async function assignApplicationEnrollment(applicationId: string, enrollmentId: string): Promise<void> {
+  must(await sb().rpc('assign_application_enrollment', { p_application_id: applicationId, p_enrollment_id: enrollmentId }));
+}
+export interface CohortImportRow {
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  delivery_mode: 'online' | 'physical' | 'hybrid';
+  submitted_at?: string | null;
+  external_ref?: string | null;
+  answers?: Record<string, string>;
+}
+/** Dry-run by default. Never accepts or enrolls; duplicates are reported, not overwritten. */
+export async function importCohortApplications(cohortId: string, rows: CohortImportRow[], dryRun = true): Promise<CohortImportResult> {
+  return must(await sb().rpc('import_cohort_applications', { p_cohort_id: cohortId, p_rows: rows as unknown as Json, p_dry_run: dryRun })) as CohortImportResult;
+}
+export async function sendCohortStartReminder(cohortId: string, message?: string | null): Promise<number> {
+  return (must(await sb().rpc('send_cohort_start_reminder', { p_cohort_id: cohortId, p_message: message ?? null })) as number) ?? 0;
+}
+
 export type QuestionReviewDecision = 'approve' | 'reject' | 'retire' | 'draft';
 export async function reviewQuizQuestion(id: string, decision: QuestionReviewDecision, note?: string | null): Promise<void> {
   must(await sb().rpc('review_quiz_question', { p_question_id: id, p_decision: decision, p_note: note ?? null }));

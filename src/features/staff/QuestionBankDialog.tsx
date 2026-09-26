@@ -15,6 +15,7 @@ import { Skeleton, Alert, EmptyState } from '@/components/ui/Misc';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { formatDateTime } from '@/lib/utils';
+import { parseCsv } from '@/lib/csv';
 import type { Lesson, PracticeItem, Quiz, QuizQuestion, QuestionStatus, QuestionDifficulty, QuizSelectionPreview, McOption, MatchingOptions } from '@/types/database';
 
 type Tab = 'bank' | 'preview' | 'analytics' | 'import' | 'ai';
@@ -363,37 +364,6 @@ function AnalyticsTab({ quizId, questions }: { quizId: string; questions: QuizQu
       </div>
     </div>
   );
-}
-
-/** Minimal CSV parser (quoted fields, commas, CRLF). */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!;
-    if (quoted) {
-      if (c === '"' && text[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else if (c === '"') quoted = false;
-      else cell += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ',') {
-      row.push(cell);
-      cell = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(cell);
-      if (row.some((x) => x.trim())) rows.push(row);
-      row = [];
-      cell = '';
-    } else cell += c;
-  }
-  row.push(cell);
-  if (row.some((x) => x.trim())) rows.push(row);
-  return rows;
 }
 
 function csvToQuestions(text: string): ImportedQuestion[] {

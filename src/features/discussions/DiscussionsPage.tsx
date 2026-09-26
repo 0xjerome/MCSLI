@@ -8,7 +8,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { isStaff } from '@/domain/roles';
 import { useMyEnrollment, useCourseMap } from '@/features/student/useEnrollment';
 import { listThreads, createThread } from '@/services/community';
-import { listAllCourses, listMonths } from '@/services/staff';
+import { listAllCourses, listMonths, listCohorts } from '@/services/staff';
 import { PageHeader } from '@/app/layouts/Shell';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -30,6 +30,7 @@ export default function DiscussionsPage() {
   const [monthFilter, setMonthFilter] = useState<string>('');
   const map = useCourseMap(!staff ? enrollment?.id : null);
   const months = useQuery({ queryKey: ['months', activeCourse], queryFn: () => listMonths(activeCourse), enabled: staff && Boolean(activeCourse) });
+  const cohorts = useQuery({ queryKey: ['cohorts', activeCourse], queryFn: () => listCohorts(activeCourse), enabled: staff && Boolean(activeCourse) });
   const threads = useQuery({ queryKey: ['threads', activeCourse, monthFilter], queryFn: () => listThreads(activeCourse, monthFilter || null), enabled: Boolean(activeCourse) });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,7 @@ export default function DiscussionsPage() {
     setBusy(true);
     setError('');
     try {
-      const id = await createThread({ courseId: activeCourse, monthId: String(fd.get('month_id')) || null, authorId: user.id, title: String(fd.get('title')), body: String(fd.get('body')), isAnnouncement: staff && fd.get('announcement') === 'on', isPinned: staff && fd.get('pinned') === 'on' });
+      const id = await createThread({ courseId: activeCourse, monthId: String(fd.get('month_id')) || null, cohortId: staff ? String(fd.get('cohort_id') ?? '') || null : null, authorId: user.id, title: String(fd.get('title')), body: String(fd.get('body')), isAnnouncement: staff && fd.get('announcement') === 'on', isPinned: staff && fd.get('pinned') === 'on' });
       await qc.invalidateQueries({ queryKey: ['threads'] });
       setOpen(false);
       window.location.assign(`${base}/discussions/${id}`);
@@ -104,10 +105,13 @@ export default function DiscussionsPage() {
           <Select name="month_id" label="Related month" optionalLabel placeholder="General / whole course" options={monthOptions} />
           <Textarea name="body" label="Your question or message" required minLength={1} rows={6} />
           {staff && (
-            <div className="flex flex-wrap gap-6">
-              <Checkbox name="announcement" label="Post as announcement" description="Notifies every enrolled student." />
-              <Checkbox name="pinned" label="Pin to top" />
-            </div>
+            <>
+              <Select name="cohort_id" label="Cohort" optionalLabel placeholder="Whole course (every cohort)" options={(cohorts.data ?? []).map((c) => ({ value: c.id, label: c.name }))} hint="Choose a cohort to show this post (and its announcement notification) only to that cohort's students." />
+              <div className="flex flex-wrap gap-6">
+                <Checkbox name="announcement" label="Post as announcement" description="Notifies the enrolled students it is addressed to." />
+                <Checkbox name="pinned" label="Pin to top" />
+              </div>
+            </>
           )}
           {error && <Alert tone="danger">{error}</Alert>}
           <div className="flex justify-end gap-2">

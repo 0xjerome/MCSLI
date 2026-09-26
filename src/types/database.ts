@@ -89,13 +89,204 @@ export interface Course {
   updated_at: string;
 }
 
+export type CohortDeliveryMode = 'online' | 'physical' | 'hybrid';
+export type CohortStatusOverride = 'applications_open' | 'applications_closed' | 'completed' | null;
+/** Provenance of published cohort facts (first-party MCSLI sources only). */
+export interface CohortSource {
+  label: string;
+  url?: string | null;
+  note?: string | null;
+}
+
 export interface Cohort {
   id: string;
   course_id: string;
   name: string;
   start_date: string | null;
   end_date: string | null;
+  /** Manual "applications accepting" switch; the derived state also honours opening time and deadline. */
   is_open: boolean;
+  cohort_number: number | null;
+  slug: string | null;
+  tagline: string | null;
+  description: string | null;
+  delivery_mode: CohortDeliveryMode;
+  physical_location: string | null;
+  online_details: string | null;
+  schedule_notes: string | null;
+  application_opens_at: string | null;
+  application_deadline: string | null;
+  status_override: CohortStatusOverride;
+  capacity: number | null;
+  is_published: boolean;
+  is_featured: boolean;
+  hero_image_path: string | null;
+  announcement_url: string | null;
+  certificate_description: string | null;
+  eligibility: string | null;
+  registration_fee: number | null;
+  tuition_online: number | null;
+  tuition_physical: number | null;
+  currency: string;
+  auto_accept: boolean;
+  fallback_form_url: string | null;
+  verified_participant_count: number | null;
+  completion_summary: string | null;
+  sources: CohortSource[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type CohortQuestionType = 'short_text' | 'long_text' | 'email' | 'phone' | 'date' | 'single_choice' | 'multiple_choice' | 'yes_no' | 'country' | 'location' | 'delivery_mode';
+export interface CohortQuestion {
+  id: string;
+  cohort_id: string;
+  key: string;
+  label: string;
+  help_text: string | null;
+  question_type: CohortQuestionType;
+  options: string[];
+  required: boolean;
+  is_active: boolean;
+  is_sensitive: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+/** What the public application form receives (active questions only). */
+export type PublicCohortQuestion = Pick<CohortQuestion, 'key' | 'label' | 'help_text' | 'question_type' | 'options' | 'required' | 'is_sensitive' | 'position'>;
+
+/** Public shape returned by public_cohorts()/public_cohort() – no internal fields. */
+export interface PublicCohort {
+  id: string;
+  slug: string;
+  name: string;
+  cohort_number: number | null;
+  tagline: string | null;
+  description: string | null;
+  delivery_mode: CohortDeliveryMode;
+  physical_location: string | null;
+  online_details: string | null;
+  schedule_notes: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  application_opens_at: string | null;
+  application_deadline: string | null;
+  capacity: number | null;
+  is_featured: boolean;
+  hero_image_path: string | null;
+  announcement_url: string | null;
+  certificate_description: string | null;
+  eligibility: string | null;
+  registration_fee: number | null;
+  tuition_online: number | null;
+  tuition_physical: number | null;
+  currency: string;
+  fallback_form_url: string | null;
+  verified_participant_count: number | null;
+  completion_summary: string | null;
+  sources: CohortSource[];
+  phase: 'upcoming' | 'in_progress' | 'completed';
+  applications: 'open' | 'closed' | 'opening_soon';
+  course: { id: string; slug: string; title: string; short_description: string | null; duration_months: number; certificate_title: string | null; is_published: boolean } | null;
+  questions?: PublicCohortQuestion[];
+}
+
+export type CohortApplicationStatus = 'draft' | 'submitted' | 'under_review' | 'accepted' | 'waitlisted' | 'rejected' | 'withdrawn';
+export type CohortApplicationSource = 'native' | 'google_forms_import' | 'staff';
+export interface CohortApplicationAnswer {
+  key: string;
+  label: string;
+  type: CohortQuestionType;
+  answer: Json;
+  sensitive: boolean;
+}
+/** Admin view (table row). */
+export interface CohortApplication {
+  id: string;
+  cohort_id: string;
+  reference: string;
+  user_id: string | null;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  delivery_mode: CohortDeliveryMode;
+  status: CohortApplicationStatus;
+  answers: CohortApplicationAnswer[];
+  source: CohortApplicationSource;
+  external_ref: string | null;
+  consent_accepted_at: string | null;
+  submitted_at: string;
+  email_verified_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  internal_notes: string | null;
+  enrollment_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface CohortApplicationEvent {
+  id: string;
+  application_id: string;
+  from_status: string | null;
+  to_status: string;
+  actor_id: string | null;
+  note: string | null;
+  created_at: string;
+}
+/** Applicant's own view (my_cohort_applications). */
+export interface MyCohortApplication {
+  id: string;
+  reference: string;
+  status: CohortApplicationStatus;
+  delivery_mode: CohortDeliveryMode;
+  submitted_at: string;
+  email_verified: boolean;
+  enrollment_id: string | null;
+  reviewed_at: string | null;
+  answers: CohortApplicationAnswer[];
+  cohort: PublicCohort;
+}
+export interface CohortApplicationReceipt {
+  application_id: string;
+  reference: string;
+  status: CohortApplicationStatus;
+  submitted_at: string;
+  full_name: string;
+  email: string;
+  cohort: { id: string; name: string; slug: string; cohort_number: number | null };
+  email_verification_required: boolean;
+}
+export interface CohortStats {
+  applications: number;
+  submitted: number;
+  under_review: number;
+  accepted: number;
+  waitlisted: number;
+  rejected: number;
+  withdrawn: number;
+  enrolled: number;
+  imported: number;
+  email_unverified: number;
+  online: number;
+  physical: number;
+  hybrid: number;
+  enrollments: number;
+  payment_pending: number;
+  payment_confirmed: number;
+  active_students: number;
+  completed_students: number;
+  enrolled_online: number;
+  enrolled_physical: number;
+  enrolled_hybrid: number;
+}
+export interface CohortImportResult {
+  dry_run: boolean;
+  rows: number;
+  importable: number;
+  imported: number;
+  duplicates: { row: number; email: string; reason: string; reference?: string | null }[];
+  invalid: { row: number; reason: string }[];
 }
 
 export interface TrainerAssignment {
@@ -226,6 +417,7 @@ export interface Enrollment {
   user_id: string;
   course_id: string;
   cohort_id: string | null;
+  delivery_mode: CohortDeliveryMode | null;
   status: EnrollmentStatus;
   plan_type: PaymentPlanType;
   nationality: NationalityClass;

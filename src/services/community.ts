@@ -54,10 +54,10 @@ export async function listPosts(threadId: string): Promise<DiscussionPost[]> {
   return attachProfiles(must(await sb().from('discussion_posts').select('*').eq('thread_id', threadId).order('created_at')) as DiscussionPost[], 'author_id', 'author');
 }
 
-export async function createThread(input: { courseId: string; monthId?: string | null; authorId: string; title: string; body: string; isAnnouncement?: boolean; isPinned?: boolean }): Promise<string> {
+export async function createThread(input: { courseId: string; monthId?: string | null; cohortId?: string | null; authorId: string; title: string; body: string; isAnnouncement?: boolean; isPinned?: boolean }): Promise<string> {
   const res = await sb()
     .from('discussion_threads')
-    .insert({ course_id: input.courseId, month_id: input.monthId ?? null, author_id: input.authorId, title: input.title.trim(), body: input.body.trim(), is_announcement: Boolean(input.isAnnouncement), is_pinned: Boolean(input.isPinned) })
+    .insert({ course_id: input.courseId, month_id: input.monthId ?? null, cohort_id: input.cohortId ?? null, author_id: input.authorId, title: input.title.trim(), body: input.body.trim(), is_announcement: Boolean(input.isAnnouncement), is_pinned: Boolean(input.isPinned) })
     .select('id')
     .single();
   return (must(res) as { id: string }).id;

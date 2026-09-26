@@ -13,6 +13,7 @@ const NAV = [
   { label: 'About', to: '/about' },
   { label: 'Programs', to: '/programs' },
   { label: 'Online Learning', to: '/online-learning' },
+  { label: 'Cohorts', to: '/cohorts' },
   { label: 'Impact', to: '/impact' },
   { label: 'Events', to: '/events' },
   { label: 'Gallery', to: '/gallery' },

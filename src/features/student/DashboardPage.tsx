@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, PlayCircle, ClipboardCheck, CreditCard, MessageSquare, Award, LifeBuoy, ShieldCheck, Lock } from 'lucide-react';
+import { ArrowRight, PlayCircle, ClipboardCheck, CreditCard, MessageSquare, Award, LifeBuoy, ShieldCheck, Lock, Users } from 'lucide-react';
 import { usePageMeta } from '@/lib/seo';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useMyEnrollment, useCourseMap, summarise } from './useEnrollment';
-import { listMyAssessments, listLessonProgress, listModulesWithLessons, listMyCertificates } from '@/services/student';
+import { listMyAssessments, listLessonProgress, listModulesWithLessons, listMyCertificates, getMyCohort } from '@/services/student';
+import { DELIVERY_MODE_LABEL } from '@/domain/cohorts';
 import { listMyPayments } from '@/services/payments';
 import { getMyIdentity } from '@/services/identity';
 import { listThreads } from '@/services/community';
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const identity = useQuery({ queryKey: ['my-identity'], queryFn: getMyIdentity });
   const threads = useQuery({ queryKey: ['threads', enrollment?.course_id], queryFn: () => listThreads(enrollment!.course_id), enabled: Boolean(enrollment) });
   const certs = useQuery({ queryKey: ['my-certificates'], queryFn: listMyCertificates });
+  const cohort = useQuery({ queryKey: ['my-cohort', enrollment?.cohort_id], queryFn: () => getMyCohort(enrollment!.cohort_id!), enabled: Boolean(enrollment?.cohort_id) });
 
   if (isLoading) return <DashboardSkeleton />;
   if (error) return <ErrorState onRetry={() => refetch()} />;
@@ -103,6 +105,36 @@ export default function DashboardPage() {
         <div className="mt-6">
           <LockedCard title={`Month ${s.nextLocked.month_number}`} reasons={lockReasons} compact />
         </div>
+      )}
+
+      {cohort.data && (
+        <Card className="mt-6" padding="sm">
+          <div className="flex flex-wrap items-start justify-between gap-4 p-1">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-medium text-ink-600">
+                <Users className="h-4 w-4" aria-hidden="true" /> Your cohort
+              </p>
+              <p className="mt-1 text-lg font-semibold text-ink-900">{cohort.data.name}</p>
+              <p className="text-sm text-ink-600">
+                {enrollment.course.title}
+                {cohort.data.start_date ? ` · ${formatDate(cohort.data.start_date)}` : ''}
+                {cohort.data.end_date ? ` – ${formatDate(cohort.data.end_date)}` : ''}
+                {` · ${DELIVERY_MODE_LABEL[enrollment.delivery_mode ?? cohort.data.delivery_mode]}`}
+                {currentMonth ? ` · currently Month ${currentMonth.month_number}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/app/discussions" className="text-sm font-semibold text-brand-700 hover:underline">
+                Cohort announcements
+              </Link>
+              {cohort.data.slug && cohort.data.is_published && (
+                <Link to={`/cohorts/${cohort.data.slug}`} className="text-sm font-semibold text-brand-700 hover:underline">
+                  Cohort page
+                </Link>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

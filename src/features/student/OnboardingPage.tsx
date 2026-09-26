@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -7,15 +7,16 @@ import { formatUGX } from '@/lib/utils';
 import { friendlyError } from '@/lib/supabase';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { listPublishedCourses } from '@/services/public';
-import { enrollInCourse } from '@/services/student';
+import { enrollInCourse, listEnrollableCohorts, listMyCohortApplications } from '@/services/student';
 import { useMyEnrollment, enrollmentKeys } from './useEnrollment';
 import { buildFeeSchedule, type CourseFeeConfig } from '@/domain/pricing';
+import { DELIVERY_MODE_LABEL } from '@/domain/cohorts';
 import type { PaymentPlanType } from '@/domain/types';
 import type { Course } from '@/types/database';
 import { PageHeader } from '@/app/layouts/Shell';
 import { Card } from '@/components/ui/Card';
 import { RadioCards } from '@/components/ui/Field';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Alert, EmptyState, Skeleton, ErrorState } from '@/components/ui/Misc';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
@@ -31,6 +32,37 @@ const toConfig = (c: Course): CourseFeeConfig => ({
   installmentDueBeforeMonth: Object.fromEntries(Object.entries(c.installment_due_before_month ?? {}).map(([k, v]) => [Number(k), Number(v)])),
 });
 
+/** Cohort choice for the course: open intakes plus the cohort that accepted this student (pre-selected). */
+function CohortPicker({ courseId, value, onChange, acceptedCohortId }: { courseId: string; value: string | null; onChange: (v: string | null) => void; acceptedCohortId: string | null }) {
+  const cohorts = useQuery({ queryKey: ['enrollable-cohorts', courseId], queryFn: () => listEnrollableCohorts(courseId) });
+  const list = useMemo(() => cohorts.data ?? [], [cohorts.data]);
+  useEffect(() => {
+    if (value !== null) return;
+    const preferred = list.find((c) => c.id === acceptedCohortId) ?? list.find((c) => c.accepted) ?? (list.length === 1 ? list[0] : undefined);
+    if (preferred) onChange(preferred.id);
+  }, [list, value, onChange, acceptedCohortId]);
+  if (cohorts.isLoading || list.length === 0) return null;
+  return (
+    <Card>
+      <RadioCards
+        name="cohort"
+        legend="Your cohort"
+        value={value ?? ''}
+        onChange={(v) => onChange(v || null)}
+        options={[
+          ...list.map((c) => ({
+            value: c.id,
+            title: c.name,
+            badge: c.accepted ? <Badge tone="success" size="sm">Accepted</Badge> : c.applications === 'open' ? <Badge tone="info" size="sm">Open</Badge> : undefined,
+            description: `${DELIVERY_MODE_LABEL[c.delivery_mode]}${c.start_date ? ` · starts ${c.start_date}` : ''}${c.physical_location && c.delivery_mode !== 'online' ? ` · ${c.physical_location}` : ''}`,
+          })),
+          { value: '', title: 'No cohort – self-paced online', description: 'Study the online course at your own pace without a cohort group.' },
+        ]}
+      />
+    </Card>
+  );
+}
+
 export default function OnboardingPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -38,7 +70,9 @@ export default function OnboardingPage() {
   const toast = useToast();
   const { enrollment, isLoading } = useMyEnrollment();
   const courses = useQuery({ queryKey: ['public-courses'], queryFn: listPublishedCourses });
+  const applications = useQuery({ queryKey: ['my-cohort-applications'], queryFn: listMyCohortApplications });
   const [courseId, setCourseId] = useState<string | null>(null);
+  const [cohortId, setCohortId] = useState<string | null>(null);
   const [plan, setPlan] = useState<PaymentPlanType | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -53,13 +87,15 @@ export default function OnboardingPage() {
   const selected = list.find((c) => c.id === courseId) ?? (list.length === 1 ? list[0] : undefined);
   const nationality = profile?.nationality ?? 'ugandan';
   const schedule = selected && plan ? buildFeeSchedule(toConfig(selected), nationality, plan) : null;
+  const accepted = (applications.data ?? []).find((a) => a.status === 'accepted' && !a.enrollment_id);
+  const pending = (applications.data ?? []).find((a) => a.status === 'submitted' || a.status === 'under_review' || a.status === 'waitlisted');
 
   const enroll = async () => {
     if (!selected || !plan) return;
     setBusy(true);
     setError('');
     try {
-      await enrollInCourse(selected.id, plan);
+      await enrollInCourse(selected.id, plan, cohortId || null);
       await qc.invalidateQueries({ queryKey: enrollmentKeys.list });
       toast.success('Enrolled', 'Now submit your registration fee and first tuition payment.');
       navigate('/app/payments', { replace: true });
@@ -73,11 +109,22 @@ export default function OnboardingPage() {
   return (
     <>
       <PageHeader eyebrow="Step 1 of 3" title="Enroll in a course" description={`You registered as a ${nationality === 'ugandan' ? 'Ugandan' : 'non-Ugandan'} student, so the fees below apply to you.`} />
+      {accepted && (
+        <Alert tone="success" className="mb-6" title={`You were accepted into ${accepted.cohort.name}`}>
+          Application {accepted.reference}. The cohort is pre-selected below – enroll and submit your payment to secure your place.
+        </Alert>
+      )}
+      {!accepted && pending && (
+        <Alert tone="info" className="mb-6" title={`Your application for ${pending.cohort.name} is ${pending.status === 'waitlisted' ? 'on the waiting list' : 'being reviewed'}`}>
+          Reference {pending.reference}. You will be e-mailed the outcome. You can already enroll in the online course if you prefer not to wait.
+        </Alert>
+      )}
       {list.length === 0 ? (
-        <EmptyState title="No course is open for enrollment right now" description="MCSLI will open the next online cohort soon. You will be notified by e-mail." />
+        <EmptyState title="No course is open for enrollment right now" description="MCSLI will open the next cohort soon. You will be notified by e-mail." action={<ButtonLink to="/cohorts" variant="outline">See cohorts</ButtonLink>} />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr,20rem]">
           <div className="space-y-6">
+            {selected && <CohortPicker courseId={selected.id} value={cohortId} onChange={setCohortId} acceptedCohortId={accepted?.cohort.id ?? null} />}
             {list.length > 1 && (
               <Card>
                 <RadioCards

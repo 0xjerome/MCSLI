@@ -6,6 +6,7 @@ import { ButtonLink } from '@/components/ui/Button';
 import { SectionHeader } from '@/components/ui/Misc';
 import { Section, ProgramCard, StoryCard, CtaBand } from '@/components/public/Sections';
 import { Announcements } from '@/components/public/Announcements';
+import { CurrentCohort } from '@/components/public/CurrentCohort';
 
 const steps = [
   { icon: UserPlus, title: 'Register', text: 'Create your account and tell us whether you study from Uganda or abroad.' },
@@ -84,6 +85,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      <CurrentCohort />
       <Announcements />
 
       {/* ---------------- Online learning ---------------- */}

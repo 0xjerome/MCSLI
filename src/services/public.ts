@@ -1,5 +1,49 @@
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { CertificateVerification, Course, EventRow } from '@/types/database';
+import type { CertificateVerification, CohortApplicationReceipt, Course, EventRow, Json, PublicCohort } from '@/types/database';
+
+// ---------------------------------------------------------------------------
+// Cohorts (public): published cohorts, one cohort with its application questions, applications
+// ---------------------------------------------------------------------------
+export async function listPublicCohorts(): Promise<PublicCohort[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await getSupabase().rpc('public_cohorts');
+  if (error) throw error;
+  return (data as PublicCohort[]) ?? [];
+}
+
+export async function getPublicCohort(slug: string): Promise<PublicCohort | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await getSupabase().rpc('public_cohort', { p_slug: slug });
+  if (error) throw error;
+  return (data as PublicCohort | null) ?? null;
+}
+
+export interface CohortApplicationInput {
+  slug: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  deliveryMode: 'online' | 'physical' | 'hybrid';
+  answers: Record<string, Json>;
+  consent: boolean;
+  /** Honeypot – must stay empty. */
+  website?: string;
+}
+/** Deadline, validation, rate limits and duplicate checks are enforced by the database function. */
+export async function submitCohortApplication(input: CohortApplicationInput): Promise<CohortApplicationReceipt> {
+  const { data, error } = await getSupabase().rpc('submit_cohort_application', {
+    p_slug: input.slug, p_full_name: input.fullName, p_email: input.email, p_phone: input.phone, p_delivery_mode: input.deliveryMode,
+    p_answers: input.answers, p_consent: input.consent, p_website: input.website ?? null,
+  });
+  if (error) throw error;
+  return data as CohortApplicationReceipt;
+}
+
+export async function verifyCohortApplication(token: string): Promise<{ reference: string; full_name: string; cohort: { name: string; slug: string } }> {
+  const { data, error } = await getSupabase().rpc('verify_cohort_application', { p_token: token });
+  if (error) throw error;
+  return data as { reference: string; full_name: string; cohort: { name: string; slug: string } };
+}
 
 /**
  * Fee structure used on the public site when no course has been published in the

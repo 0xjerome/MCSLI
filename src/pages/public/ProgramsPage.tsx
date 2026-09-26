@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, Clock, Award, CheckCircle2, Hand } from 'lucide-react';
+import { CurrentCohort } from '@/components/public/CurrentCohort';
 import { usePageMeta } from '@/lib/seo';
 import { useSiteContent } from '@/content/useSiteContent';
 import { Section, PageHero, ProgramCard, CtaBand, iconMap } from '@/components/public/Sections';
@@ -38,10 +40,16 @@ export default function ProgramsPage() {
         <TabPanel id="training" value={tab} className="mt-10">
           <SectionHeader title="Sign language training programs" description={programs.intro} />
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <CurrentCohort variant="card" />
             {programs.training.map((p) => (
               <ProgramCard key={p.slug} program={p} />
             ))}
           </div>
+          <p className="mt-4 text-sm text-ink-600">
+            <Link to="/cohorts" className="font-semibold text-brand-700 hover:underline">
+              See all cohorts – current, upcoming and previous →
+            </Link>
+          </p>
 
           <div className="mt-14 grid gap-8 lg:grid-cols-12">
             <div className="lg:col-span-7">

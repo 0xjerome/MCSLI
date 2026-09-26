@@ -7,6 +7,7 @@ const items: NavItem[] = [
   { label: 'Staff', to: '/admin/staff', icon: UserPlus },
   { label: 'Trainers', to: '/admin/trainers', icon: UserCog },
   { label: 'Courses', to: '/admin/courses', icon: BookOpen },
+  { label: 'Cohorts', to: '/admin/cohorts', icon: Users },
   { label: 'AI Training', to: '/admin/ai-training', icon: BrainCircuit },
   { label: 'Enrollments', to: '/admin/enrollments', icon: ClipboardList },
   { label: 'Identity', to: '/admin/identity', icon: ShieldCheck },
