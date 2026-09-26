@@ -143,21 +143,39 @@ export default function AdminStaffPage() {
                       {i.status}
                     </Badge>
                     {i.status === 'pending' && (isSuper || i.role === 'TRAINER') && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={async () => {
-                          if (!window.confirm(`Cancel the invitation for ${i.email}? The link will stop working.`)) return;
-                          try {
-                            await cancelStaffInvitation(i.id);
-                            await invitations.refetch();
-                          } catch (err) {
-                            toast.error('Not cancelled', friendlyError(err));
-                          }
-                        }}
-                      >
-                        Cancel
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const r = await inviteStaff({ email: i.email, fullName: i.full_name, role: i.role });
+                              await invitations.refetch();
+                              if (r.email_sent) toast.success('Invitation resent', 'The previous link was replaced with a new 7-day invitation.');
+                              else toast.error('Invitation created, e-mail not sent', r.email_error ?? 'Check the e-mail configuration, then try again.');
+                            } catch (err) {
+                              toast.error('Not resent', friendlyError(err));
+                            }
+                          }}
+                        >
+                          Resend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            if (!window.confirm(`Cancel the invitation for ${i.email}? The link will stop working.`)) return;
+                            try {
+                              await cancelStaffInvitation(i.id);
+                              await invitations.refetch();
+                            } catch (err) {
+                              toast.error('Not cancelled', friendlyError(err));
+                            }
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </>
                     )}
                   </div>
                 </li>
