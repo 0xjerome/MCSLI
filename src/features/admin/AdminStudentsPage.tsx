@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { usePageMeta } from '@/lib/seo';
-import { listProfiles } from '@/services/staff';
+import { listProfiles, listStaffInvitations } from '@/services/staff';
 import { PageHeader } from '@/app/layouts/Shell';
 import { DataTable } from '@/components/ui/DataTable';
 import { Input, Select } from '@/components/ui/Field';
@@ -19,8 +19,13 @@ export default function AdminStudentsPage() {
   const [role, setRole] = useState<UserRole | ''>('STUDENT');
   const [page, setPage] = useState(1);
   const q = useQuery({ queryKey: ['profiles', role, search, page], queryFn: () => listProfiles({ role: role || undefined, search: search || undefined, page }) });
+  const invitations = useQuery({ queryKey: ['staff-invitations'], queryFn: listStaffInvitations });
   usePageMeta({ title: 'Students', noIndex: true });
   if (q.isError) return <ErrorState onRetry={() => q.refetch()} />;
+  const pendingStaffEmails = new Set(
+    (invitations.data ?? []).filter((i) => i.status === 'pending').map((i) => i.email.toLowerCase()),
+  );
+  const rows = (q.data?.rows ?? []).filter((p) => !pendingStaffEmails.has(p.email.toLowerCase()));
   const pageCount = Math.max(1, Math.ceil((q.data?.count ?? 0) / 25));
 
   return (
@@ -32,7 +37,7 @@ export default function AdminStudentsPage() {
       </div>
       <DataTable<Profile>
         caption="Accounts"
-        rows={q.data?.rows}
+        rows={rows}
         loading={q.isLoading}
         rowKey={(p) => p.id}
         onRowClick={(p) => navigate(`/admin/students/${p.id}`)}
