@@ -142,6 +142,7 @@ Migrations live in `supabase/migrations/` and are ordered:
 | `0013_staff_invitations_and_launch_safety.sql` | staff invitations, optional staff MFA enforcement, publish validation, delete protection |
 | `0014_transactional_email_outbox.sql` | payment e-mail queue + dispatcher schedule |
 | `20260927090000_quiz_question_banks.sql` | randomized quiz question banks: question metadata/status/versioning, quiz blueprints, server-side selection, permanent attempt snapshots, autosave, practice mode, review/analytics/import RPCs, AI draft runs (see `docs/QUIZ_QUESTION_BANKS.md`) |
+| `20260927140000_cohorts_and_applications.sql` | cohorts as public content (dates, format, fees, deadline, provenance) + native cohort applications with configurable questions, references, e-mail confirmation, review workflow, enrollment linking, legacy import and cohort-scoped announcements (see `docs/COHORTS.md`) |
 | `0015_pg_net_schema.sql` | pg_net moved to `extensions` |
 | `0016_advisor_views_and_anon_surface.sql` | definer views → checked functions; anonymous surface reduced to the public catalogue |
 
